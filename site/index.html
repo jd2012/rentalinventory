@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Kids Rental Tracker</title>
+  <link rel="stylesheet" href="./styles.css"/>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="brand-title">Kids Rental Tracker</div>
+      <div class="brand-sub">Multi-device website • Scan-first • Lift Pass ⇄ Gear</div>
+    </div>
+    <div id="dbStatus" class="status">Loading…</div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="checkout">Check Out</button>
+    <button class="tab" data-tab="return">Return</button>
+    <button class="tab" data-tab="lookup">Lookup</button>
+    <button class="tab" data-tab="admin">Admin</button>
+  </nav>
+
+  <main class="main">
+    <!-- CHECKOUT -->
+    <section id="tab-checkout" class="panel active">
+      <div class="grid2">
+        <div class="card">
+          <h2>1) Scan Lift Pass</h2>
+          <p class="hint">Scan the lift pass barcode to identify the guest. This opens the latest “OUT” rental for that pass, or creates a new one.</p>
+
+          <div class="scanrow">
+            <input id="coPass" class="scan" placeholder="Scan PassID (barcode)"/>
+            <button id="coClearPass" class="secondary">Clear</button>
+          </div>
+
+          <div class="rentalBox">
+            <div class="kpi">
+              <div class="kpi-label">Active Pass</div>
+              <div id="coActivePass" class="kpi-value">—</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Active Rental</div>
+              <div id="coActiveRental" class="kpi-value">—</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Items OUT</div>
+              <div id="coOutCount" class="kpi-value">0</div>
+            </div>
+          </div>
+
+          <div class="row">
+            <button id="coNewRental" class="primary" disabled>New Rental under this Pass</button>
+          </div>
+
+          <div class="divider"></div>
+          <h3>Open Rentals for this Pass</h3>
+          <div id="coOpenRentals" class="list"></div>
+        </div>
+
+        <div class="card">
+          <h2>2) Scan Gear</h2>
+          <p class="hint">Scan each gear inventory barcode. If a gear item is already OUT, you can transfer it to this rental.</p>
+
+          <div class="scanrow">
+            <input id="coGear" class="scan" placeholder="Scan GearID (inventory barcode)" disabled/>
+            <button id="coClearGear" class="secondary" disabled>Clear</button>
+          </div>
+
+          <div class="row">
+            <button id="coDone" class="secondary" disabled>Done</button>
+          </div>
+
+          <div class="divider"></div>
+          <h3>Items currently OUT on this Rental</h3>
+          <div id="coItems" class="list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RETURN -->
+    <section id="tab-return" class="panel">
+      <div class="grid2">
+        <div class="card">
+          <h2>Scan Gear OR Lift Pass</h2>
+          <p class="hint">Scan a GearID to return a single item, or scan a PassID to show everything OUT for that pass.</p>
+
+          <div class="scanrow">
+            <input id="reScan" class="scan" placeholder="Scan GearID or PassID"/>
+            <button id="reClear" class="secondary">Clear</button>
+          </div>
+
+          <div class="row">
+            <button id="reReturnAll" class="primary" disabled>Return All for this Pass</button>
+          </div>
+
+          <div class="divider"></div>
+          <h3>Result</h3>
+          <div id="reResult" class="list"></div>
+        </div>
+
+        <div class="card">
+          <h2>Quick Stats</h2>
+          <div class="rentalBox">
+            <div class="kpi">
+              <div class="kpi-label">Total OUT</div>
+              <div id="stTotalOut" class="kpi-value">0</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Open Rentals</div>
+              <div id="stOpenRentals" class="kpi-value">0</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Last Action</div>
+              <div id="stLastAction" class="kpi-value">—</div>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+          <h3>Recent OUT</h3>
+          <div id="reRecentOut" class="list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LOOKUP -->
+    <section id="tab-lookup" class="panel">
+      <div class="grid2">
+        <div class="card">
+          <h2>Lookup Gear</h2>
+          <p class="hint">Scan a GearID to see if it is currently OUT and which pass it’s linked to.</p>
+
+          <div class="scanrow">
+            <input id="luGear" class="scan" placeholder="Scan GearID"/>
+            <button id="luClear" class="secondary">Clear</button>
+          </div>
+
+          <div class="divider"></div>
+          <div id="luResult" class="list"></div>
+        </div>
+
+        <div class="card">
+          <h2>Lookup Pass</h2>
+          <p class="hint">Scan a PassID to see all items currently OUT for that pass.</p>
+
+          <div class="scanrow">
+            <input id="luPass" class="scan" placeholder="Scan PassID"/>
+            <button id="luPassClear" class="secondary">Clear</button>
+          </div>
+
+          <div class="divider"></div>
+          <div class="row">
+            <button id="luReturnAll" class="primary" disabled>Return All for this Pass</button>
+          </div>
+          <div class="divider"></div>
+          <div id="luPassResult" class="list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ADMIN -->
+    <section id="tab-admin" class="panel">
+      <div class="grid2">
+        <div class="card">
+          <h2>Admin</h2>
+          <p class="hint">Data is stored locally in this browser (no internet required). Use Export daily if you need a backup.</p>
+
+          <div class="divider"></div>
+
+          <div class="row">
+            <button id="exJson" class="primary">Export JSON Backup</button>
+            <button id="wipe" class="danger">Wipe Local Data</button>
+          </div>
+
+          <div class="divider"></div>
+
+          <h3>Import JSON Backup</h3>
+          <div class="fileRow">
+            <input id="imJsonFile" type="file" accept="application/json"/>
+            <button id="imJson" class="secondary">Import</button>
+          </div>
+
+          <div class="divider"></div>
+          <h3>Admin Log</h3>
+          <div id="adminLog" class="list"></div>
+        </div>
+
+        <div class="card">
+          <h2>Notes</h2>
+          <div class="item">
+            <div class="left">
+              <div class="title">No installs needed</div>
+              <div class="sub">This is just HTML/CSS/JS. You can open index.html in a browser.</div>
+            </div>
+            <div class="badge good">OK</div>
+          </div>
+
+          <div class="item">
+            <div class="left">
+              <div class="title">Each device is independent</div>
+              <div class="sub">Because data is stored locally in the browser, each POS has its own list unless you deploy a shared server.</div>
+            </div>
+            <div class="badge warn">FYI</div>
+          </div>
+
+          <div class="item">
+            <div class="left">
+              <div class="title">Barcode scanners “just work”</div>
+              <div class="sub">Most scanners type into the focused box and press Enter.</div>
+            </div>
+            <div class="badge good">TIP</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div>Scan-first workflow • Lift Pass ⇄ Gear</div>
+    <div>Local-only storage (no internet)</div>
+  </footer>
+
+  <!-- Modal -->
+  <div id="modal" class="modal" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div id="modalTitle" class="modal-title">Confirm</div>
+      <div id="modalBody" class="modal-body"></div>
+      <div class="modal-actions">
+        <button id="modalNo" class="secondary">Cancel</button>
+        <button id="modalYes" class="primary">Yes</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./config.js?v=5"></script>
+  <script src="./app.js?v=5"></script>
+<!-- PIN Modal -->
+<div id="pinModal" class="modal" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <div class="modal-title">Enter Shop PIN</div>
+    <div class="modal-body">
+      <div class="hint" style="margin-top:0">This site connects to the shared rentals database. Enter the shop PIN to continue.</div>
+      <div style="display:flex; gap:10px; margin-top:10px; align-items:center">
+        <input id="pinInput" class="scan" type="password" placeholder="PIN" inputmode="numeric" style="flex:1"/>
+        <button id="pinGo" class="primary">Unlock</button>
+      </div>
+      <div id="pinErr" class="hint" style="margin-top:10px; color: var(--bad); display:none"></div>
+      <div class="hint" style="margin-top:10px">
+        If this keeps failing, the backend route may not be mapped. The app will auto-detect and use the worker URL when needed.
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
