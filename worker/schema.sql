@@ -33,3 +33,15 @@ CREATE TABLE IF NOT EXISTS meta (
 );
 
 INSERT OR IGNORE INTO meta(key, value) VALUES ('last_action', '—');
+
+CREATE TABLE IF NOT EXISTS inventory (
+  gear_id TEXT PRIMARY KEY,
+  gear_type TEXT,
+  size TEXT,
+  end_of_life_date TEXT,
+  status TEXT DEFAULT 'ACTIVE',
+  updated_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_inventory_type
+ON inventory(gear_type);
