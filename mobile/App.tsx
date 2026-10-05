@@ -17,6 +17,7 @@ import {
   lookupGear,
   returnAllForPass,
   returnScan,
+  setAuthToken,
   verifyPin,
 } from './src/lib/api';
 import type { GearItem, Mode, Rental, Stats } from './src/types';
@@ -37,7 +38,10 @@ export default function App() {
   const [scanStatus, setScanStatus] = useState<string | null>(null);
 
   async function refreshStats() {
-    try { setStats(await getStats()); } catch { }
+    try {
+      if (pin.trim()) setAuthToken(pin.trim());
+      setStats(await getStats());
+    } catch { }
   }
 
   async function login() {
@@ -66,6 +70,7 @@ export default function App() {
   }
 
   async function onPassScanned(code: string) {
+    if (pin.trim()) setAuthToken(pin.trim());
     setScanStatus(`Pass read: ${code}. Contacting rental system…`);
     try {
       const opened = await Promise.race([
@@ -91,6 +96,7 @@ export default function App() {
   }
 
   async function onGearScanned(code: string) {
+    if (pin.trim()) setAuthToken(pin.trim());
     try {
       if (mode === 'checkout') {
         if (!rental || !passId) throw new Error('Scan a guest pass first.');
