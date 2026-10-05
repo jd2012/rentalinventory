@@ -6,10 +6,12 @@ export function BarcodeScanner({
   title,
   onScan,
   onCancel,
+  statusMessage,
 }: {
   title: string;
   onScan: (barcode: string) => void | Promise<void>;
   onCancel: () => void;
+  statusMessage?: string | null;
 }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [locked, setLocked] = useState(false);
@@ -63,9 +65,10 @@ export function BarcodeScanner({
         <Text style={styles.title}>{title}</Text>
         <View style={styles.target} />
         <Text style={styles.help}>
-          {locked
-            ? `Read ${lastScan ?? 'barcode'} — processing…`
-            : 'Center the barcode inside the box.'}
+          {statusMessage ||
+            (locked
+              ? `Read ${lastScan ?? 'barcode'} — processing…`
+              : 'Center the barcode inside the box.')}
         </Text>
         <Pressable style={styles.cancel} onPress={onCancel}><Text style={styles.cancelText}>Cancel</Text></Pressable>
       </View>
