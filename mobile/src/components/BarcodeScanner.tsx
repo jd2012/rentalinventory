@@ -54,13 +54,15 @@ export function BarcodeScanner({
           setTimeout(() => reject(new Error('Scanner callback timed out after 8 seconds.')), 8000)
         ),
       ]);
+
+      if (singleShot) {
+        // If the parent did not navigate away, allow its status message to become visible.
+        setLocalStatus(null);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown scan error';
-      setLocalStatus(`Scan error: ${message}`);
-      setTimeout(() => {
-        setLocked(false);
-        setLocalStatus(null);
-      }, 2500);
+      setLocalStatus(null);
+      setLocked(false);
     } finally {
       if (!singleShot) {
         // Gear/lookup screens may intentionally scan multiple items.
