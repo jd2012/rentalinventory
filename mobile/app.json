@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Rental Inventory",
+    "slug": "rental-inventory",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "scheme": "rentalinventory",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "work.jd2012.rentals",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Rental Inventory uses the camera to scan guest passes and rental equipment barcodes."
+      }
+    },
+    "android": {
+      "package": "work.jd2012.rentals",
+      "permissions": ["CAMERA"]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Rental Inventory to scan guest passes and rental equipment barcodes.",
+          "barcodeScannerEnabled": true,
+          "recordAudioAndroid": false
+        }
+      ]
+    ]
+  }
+}
