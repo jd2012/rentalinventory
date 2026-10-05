@@ -150,6 +150,7 @@ export default function App() {
       <BarcodeScanner
         title="Scan guest pass"
         statusMessage={scanStatus}
+        singleShot
         onCancel={() => setScreen('home')}
         onScan={onPassScanned}
       />
