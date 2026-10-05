@@ -15,7 +15,7 @@
     "expo-camera": "~57.0.5",
     "react": "19.2.3",
     "react-native": "0.86.3",
-    "@react-native-community/datetimepicker": "9.1.0"
+    "@expo/ui": "~57.0.21"
   },
   "devDependencies": {
     "@types/react": "~19.2.0",
