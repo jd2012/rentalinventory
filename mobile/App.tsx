@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePicker from '@expo/ui/community/datetime-picker';
 import { BarcodeScanner } from './src/components/BarcodeScanner';
 import {
   addGear,
@@ -238,12 +238,14 @@ export default function App() {
                 mode="date"
                 minimumDate={new Date()}
                 display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                onChange={(_, selectedDate) => {
+                presentation={Platform.OS === 'android' ? 'dialog' : 'inline'}
+                onValueChange={(_, selectedDate) => {
+                  selectedDate.setHours(12, 0, 0, 0);
+                  setDueDate(selectedDate);
                   if (Platform.OS === 'android') setShowDatePicker(false);
-                  if (selectedDate) {
-                    selectedDate.setHours(12, 0, 0, 0);
-                    setDueDate(selectedDate);
-                  }
+                }}
+                onDismiss={() => {
+                  if (Platform.OS === 'android') setShowDatePicker(false);
                 }}
               />
             )}
