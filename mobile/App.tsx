@@ -34,6 +34,7 @@ export default function App() {
   const [returnPassItems, setReturnPassItems] = useState<Array<Record<string, unknown>>>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [busy, setBusy] = useState(false);
+  const [scanStatus, setScanStatus] = useState<string | null>(null);
 
   async function refreshStats() {
     try { setStats(await getStats()); } catch { }
@@ -54,6 +55,7 @@ export default function App() {
   }
 
   function start(newMode: Mode) {
+    setScanStatus(null);
     setMode(newMode);
     setPassId('');
     setRental(null);
@@ -64,14 +66,26 @@ export default function App() {
   }
 
   async function onPassScanned(code: string) {
+    setScanStatus(`Pass read: ${code}. Contacting rental system…`);
     try {
-      const opened = await ensureRental(code);
+      const opened = await Promise.race([
+        ensureRental(code),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Guest pass request timed out after 8 seconds.')), 8000)
+        ),
+      ]);
+      if (!opened || !opened.id) {
+        throw new Error('Rental API responded without a rental ID.');
+      }
       setPassId(code);
       setRental(opened);
+      setScanStatus(null);
       setScreen('scanGear');
       await refreshStats();
     } catch (error) {
-      Alert.alert('Could not open rental', error instanceof Error ? error.message : 'Unknown error');
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      setScanStatus(`Guest pass error: ${message}`);
+      Alert.alert('Could not open rental', message);
       setScreen('scanPass');
     }
   }
@@ -132,7 +146,14 @@ export default function App() {
   }
 
   if (screen === 'scanPass') {
-    return <BarcodeScanner title="Scan guest pass" onCancel={() => setScreen('home')} onScan={onPassScanned} />;
+    return (
+      <BarcodeScanner
+        title="Scan guest pass"
+        statusMessage={scanStatus}
+        onCancel={() => setScreen('home')}
+        onScan={onPassScanned}
+      />
+    );
   }
 
   if (screen === 'scanGear') {
