@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import {
   Alert,
+  Keyboard,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -9,6 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { BarcodeScanner } from './src/components/BarcodeScanner';
 import {
   addGear,
@@ -24,6 +27,20 @@ import type { GearItem, Mode, Rental, Stats } from './src/types';
 
 type Screen = 'login' | 'home' | 'scanPass' | 'confirmPass' | 'openingRental' | 'scanGear' | 'confirmGear' | 'rentalReview' | 'inventoryResult' | 'returnPass';
 
+function tomorrow() {
+  const value = new Date();
+  value.setHours(12, 0, 0, 0);
+  value.setDate(value.getDate() + 1);
+  return value;
+}
+
+function formatDate(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>('login');
   const [pin, setPin] = useState('');
@@ -38,7 +55,8 @@ export default function App() {
   const [scanStatus, setScanStatus] = useState<string | null>(null);
   const [pendingPass, setPendingPass] = useState<string | null>(null);
   const [pendingGear, setPendingGear] = useState<string | null>(null);
-  const [dueDate, setDueDate] = useState('');
+  const [dueDate, setDueDate] = useState<Date>(() => tomorrow());
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   async function refreshStats() {
     try {
@@ -71,7 +89,8 @@ export default function App() {
     setReturnPassItems([]);
     setPendingPass(null);
     setPendingGear(null);
-    setDueDate('');
+    setDueDate(tomorrow());
+    setShowDatePicker(false);
     setScreen(newMode === 'checkout' ? 'scanPass' : 'scanGear');
   }
 
@@ -202,15 +221,38 @@ export default function App() {
 
           <View style={styles.dueDateSection}>
             <Text style={styles.cardLabel}>Due date</Text>
-            <TextInput
-              value={dueDate}
-              onChangeText={setDueDate}
-              placeholder="YYYY-MM-DD"
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={styles.input}
-            />
-            <Text style={styles.note}>Enter the expected return date for this rental.</Text>
+            <Pressable
+              style={styles.dateButton}
+              onPress={() => {
+                Keyboard.dismiss();
+                setShowDatePicker(true);
+              }}
+            >
+              <Text style={styles.dateButtonText}>{formatDate(dueDate)}</Text>
+              <Text style={styles.dateButtonHint}>Tap to change</Text>
+            </Pressable>
+
+            {showDatePicker && (
+              <DateTimePicker
+                value={dueDate}
+                mode="date"
+                minimumDate={new Date()}
+                display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                onChange={(_, selectedDate) => {
+                  if (Platform.OS === 'android') setShowDatePicker(false);
+                  if (selectedDate) {
+                    selectedDate.setHours(12, 0, 0, 0);
+                    setDueDate(selectedDate);
+                  }
+                }}
+              />
+            )}
+
+            {Platform.OS === 'ios' && showDatePicker && (
+              <SecondaryButton label="Done choosing date" onPress={() => setShowDatePicker(false)} />
+            )}
+
+            <Text style={styles.note}>Defaults to tomorrow. Tap the date to choose a different return date.</Text>
           </View>
 
           <PrimaryButton label="Confirm pass" onPress={confirmPass} />
@@ -269,7 +311,7 @@ export default function App() {
 
           <Card label="Guest pass" value={passId || '—'} />
           <Card label="Rental ID" value={rental?.id || '—'} />
-          <Card label="Due date" value={dueDate || 'Not set'} />
+          <Card label="Due date" value={formatDate(dueDate)} />
           <Card label="Items scanned" value={String(gear.length)} />
 
           <Text style={styles.section}>Equipment</Text>
@@ -343,7 +385,8 @@ export default function App() {
   if (screen === 'login') {
     return (
       <SafeAreaView style={styles.safe}>
-        <View style={styles.page}>
+        <Pressable style={styles.flex} onPress={Keyboard.dismiss}>
+          <View style={styles.page}>
           <Text style={styles.logo}>Rental Inventory</Text>
           <Text style={styles.subtitle}>Enter the shop PIN to connect this device to the rental system.</Text>
           <TextInput
@@ -357,7 +400,8 @@ export default function App() {
             onSubmitEditing={login}
           />
           <PrimaryButton label={busy ? 'Connecting…' : 'Connect'} onPress={login} disabled={busy || !pin.trim()} />
-        </View>
+          </View>
+        </Pressable>
       </SafeAreaView>
     );
   }
@@ -403,6 +447,7 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f6f7f9' },
+  flex: { flex: 1 },
   page: { flexGrow: 1, padding: 22, gap: 14 },
   centerPage: { justifyContent: 'center' },
   logo: { fontSize: 34, fontWeight: '800', marginTop: 48 },
@@ -424,7 +469,10 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#fff', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#e5e7eb' },
   cardLabel: { color: '#6b7280', fontSize: 12, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' },
   cardValue: { color: '#111827', fontSize: 20, fontWeight: '700', marginTop: 5 },
-  dueDateSection: { backgroundColor: '#fff', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#e5e7eb', gap: 8 },
+  dueDateSection: { backgroundColor: '#fff', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#e5e7eb', gap: 10 },
+  dateButton: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 12, padding: 14, backgroundColor: '#f9fafb' },
+  dateButtonText: { fontSize: 22, fontWeight: '800', color: '#111827' },
+  dateButtonHint: { marginTop: 3, color: '#6b7280', fontSize: 12 },
   statsRow: { flexDirection: 'row', gap: 12 },
   miniStat: { flex: 1, backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e7eb' },
   miniValue: { fontSize: 28, fontWeight: '800' },
