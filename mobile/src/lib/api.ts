@@ -15,7 +15,10 @@ export function setAuthToken(token: string) {
 
 async function probe(base: string) {
   try {
-    const res = await fetch(`${base.replace(/\/$/, '')}/api/health`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(`${base.replace(/\/$/, '')}/api/health`, { signal: controller.signal });
+    clearTimeout(timeout);
     return res.status === 200 || res.status === 401;
   } catch {
     return false;
@@ -40,18 +43,31 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (authToken) headers.Authorization = `Bearer ${authToken}`;
 
-  const response = await fetch(`${apiBase}${path}`, {
-    method: body === undefined ? 'GET' : 'POST',
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
 
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new Error(detail || `HTTP ${response.status}`);
+  try {
+    const response = await fetch(`${apiBase}${path}`, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(detail || `HTTP ${response.status}`);
+    }
+
+    return response.json() as Promise<T>;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Request timed out: ${path} via ${apiBase}`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
-
-  return response.json() as Promise<T>;
 }
 
 export async function verifyPin(pin: string) {
