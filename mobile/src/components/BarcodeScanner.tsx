@@ -18,6 +18,7 @@ export function BarcodeScanner({
   const [permission, requestPermission] = useCameraPermissions();
   const [locked, setLocked] = useState(false);
   const [lastScan, setLastScan] = useState<string | null>(null);
+  const [localStatus, setLocalStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (!permission) return;
@@ -44,9 +45,22 @@ export function BarcodeScanner({
 
     setLocked(true);
     setLastScan(barcode);
+    setLocalStatus(singleShot ? `Pass read: ${barcode}. Contacting rental system…` : null);
 
     try {
-      await onScan(barcode);
+      await Promise.race([
+        Promise.resolve(onScan(barcode)),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Scanner callback timed out after 8 seconds.')), 8000)
+        ),
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown scan error';
+      setLocalStatus(`Scan error: ${message}`);
+      setTimeout(() => {
+        setLocked(false);
+        setLocalStatus(null);
+      }, 2500);
     } finally {
       if (!singleShot) {
         // Gear/lookup screens may intentionally scan multiple items.
@@ -68,7 +82,8 @@ export function BarcodeScanner({
         <Text style={styles.title}>{title}</Text>
         <View style={styles.target} />
         <Text style={styles.help}>
-          {statusMessage ||
+          {localStatus ||
+            statusMessage ||
             (locked
               ? `Read ${lastScan ?? 'barcode'} — processing…`
               : 'Center the barcode inside the box.')}
