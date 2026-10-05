@@ -7,11 +7,13 @@ export function BarcodeScanner({
   onScan,
   onCancel,
   statusMessage,
+  singleShot = false,
 }: {
   title: string;
   onScan: (barcode: string) => void | Promise<void>;
   onCancel: () => void;
   statusMessage?: string | null;
+  singleShot?: boolean;
 }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [locked, setLocked] = useState(false);
@@ -46,9 +48,10 @@ export function BarcodeScanner({
     try {
       await onScan(barcode);
     } finally {
-      // If the parent stays on this scanner (for example after an API error),
-      // allow another attempt instead of leaving the camera permanently locked.
-      setTimeout(() => setLocked(false), 900);
+      if (!singleShot) {
+        // Gear/lookup screens may intentionally scan multiple items.
+        setTimeout(() => setLocked(false), 900);
+      }
     }
   }
 
