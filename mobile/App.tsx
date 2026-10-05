@@ -90,8 +90,8 @@ export default function App() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       setScanStatus(`Guest pass error: ${message}`);
-      Alert.alert('Could not open rental', message);
       setScreen('scanPass');
+      throw error;
     }
   }
 
