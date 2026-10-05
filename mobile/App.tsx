@@ -22,7 +22,7 @@ import {
 } from './src/lib/api';
 import type { GearItem, Mode, Rental, Stats } from './src/types';
 
-type Screen = 'login' | 'home' | 'scanPass' | 'openingRental' | 'scanGear' | 'inventoryResult' | 'returnPass';
+type Screen = 'login' | 'home' | 'scanPass' | 'confirmPass' | 'openingRental' | 'scanGear' | 'confirmGear' | 'inventoryResult' | 'returnPass';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('login');
@@ -36,6 +36,8 @@ export default function App() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [busy, setBusy] = useState(false);
   const [scanStatus, setScanStatus] = useState<string | null>(null);
+  const [pendingPass, setPendingPass] = useState<string | null>(null);
+  const [pendingGear, setPendingGear] = useState<string | null>(null);
 
   async function refreshStats() {
     try {
@@ -66,13 +68,22 @@ export default function App() {
     setGear([]);
     setInventoryItem(null);
     setReturnPassItems([]);
+    setPendingPass(null);
+    setPendingGear(null);
     setScreen(newMode === 'checkout' ? 'scanPass' : 'scanGear');
   }
 
   async function onPassScanned(code: string) {
     const cleaned = code.trim();
+    setPendingPass(cleaned);
+    setScreen('confirmPass');
+  }
+
+  async function confirmPass() {
+    if (!pendingPass) return;
+    const cleaned = pendingPass;
     setPassId(cleaned);
-    setScanStatus(null);
+    setPendingPass(null);
     setScreen('openingRental');
 
     try {
@@ -100,11 +111,8 @@ export default function App() {
     try {
       if (mode === 'checkout') {
         if (!rental || !passId) throw new Error('Scan a guest pass first.');
-        await addGear(rental.id, passId, code);
-        const item = await lookupGear(code);
-        setGear((current) => current.some((g) => g.barcode === code) ? current : [...current, item]);
-        setScreen('scanGear');
-        await refreshStats();
+        setPendingGear(code.trim());
+        setScreen('confirmGear');
         return;
       }
 
@@ -136,6 +144,26 @@ export default function App() {
     }
   }
 
+  async function confirmGear() {
+    if (!pendingGear || !rental || !passId) return;
+    const code = pendingGear;
+
+    try {
+      if (pin.trim()) setAuthToken(pin.trim());
+      await addGear(rental.id, passId, code);
+      const item = await lookupGear(code);
+      setGear((current) => current.some((g) => g.barcode === code) ? current : [...current, item]);
+      setPendingGear(null);
+      setScreen('scanGear');
+      await refreshStats();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      Alert.alert('Could not add equipment', message);
+      setPendingGear(null);
+      setScreen('scanGear');
+    }
+  }
+
   async function returnWholePass() {
     if (!passId) return;
     try {
@@ -162,6 +190,21 @@ export default function App() {
     );
   }
 
+  if (screen === 'confirmPass' && pendingPass) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={[styles.page, styles.centerPage]}>
+          <Text style={styles.eyebrow}>CONFIRM GUEST PASS</Text>
+          <Text style={styles.heading}>{pendingPass}</Text>
+          <Text style={styles.subtitle}>Use this guest pass for the rental?</Text>
+          <PrimaryButton label="Confirm pass" onPress={confirmPass} />
+          <SecondaryButton label="Scan again" onPress={() => { setPendingPass(null); setScreen('scanPass'); }} />
+          <SecondaryButton label="Cancel" onPress={() => { setPendingPass(null); setScreen('home'); }} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (screen === 'openingRental') {
     return (
       <SafeAreaView style={styles.safe}>
@@ -183,6 +226,21 @@ export default function App() {
         onCancel={() => setScreen('home')}
         onScan={onGearScanned}
       />
+    );
+  }
+
+  if (screen === 'confirmGear' && pendingGear) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={[styles.page, styles.centerPage]}>
+          <Text style={styles.eyebrow}>CONFIRM EQUIPMENT</Text>
+          <Text style={styles.heading}>{pendingGear}</Text>
+          <Text style={styles.subtitle}>Add this piece of equipment to pass {passId}?</Text>
+          <PrimaryButton label="Add equipment" onPress={confirmGear} />
+          <SecondaryButton label="Scan again" onPress={() => { setPendingGear(null); setScreen('scanGear'); }} />
+          <SecondaryButton label="Done" onPress={() => { setPendingGear(null); setScreen('home'); }} />
+        </View>
+      </SafeAreaView>
     );
   }
 
