@@ -38,6 +38,7 @@ export default function App() {
   const [scanStatus, setScanStatus] = useState<string | null>(null);
   const [pendingPass, setPendingPass] = useState<string | null>(null);
   const [pendingGear, setPendingGear] = useState<string | null>(null);
+  const [dueDate, setDueDate] = useState('');
 
   async function refreshStats() {
     try {
@@ -70,6 +71,7 @@ export default function App() {
     setReturnPassItems([]);
     setPendingPass(null);
     setPendingGear(null);
+    setDueDate('');
     setScreen(newMode === 'checkout' ? 'scanPass' : 'scanGear');
   }
 
@@ -197,6 +199,20 @@ export default function App() {
           <Text style={styles.eyebrow}>CONFIRM GUEST PASS</Text>
           <Text style={styles.heading}>{pendingPass}</Text>
           <Text style={styles.subtitle}>Use this guest pass for the rental?</Text>
+
+          <View style={styles.dueDateSection}>
+            <Text style={styles.cardLabel}>Due date</Text>
+            <TextInput
+              value={dueDate}
+              onChangeText={setDueDate}
+              placeholder="YYYY-MM-DD"
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={styles.input}
+            />
+            <Text style={styles.note}>Enter the expected return date for this rental.</Text>
+          </View>
+
           <PrimaryButton label="Confirm pass" onPress={confirmPass} />
           <SecondaryButton label="Scan again" onPress={() => { setPendingPass(null); setScreen('scanPass'); }} />
           <SecondaryButton label="Cancel" onPress={() => { setPendingPass(null); setScreen('home'); }} />
@@ -253,6 +269,7 @@ export default function App() {
 
           <Card label="Guest pass" value={passId || '—'} />
           <Card label="Rental ID" value={rental?.id || '—'} />
+          <Card label="Due date" value={dueDate || 'Not set'} />
           <Card label="Items scanned" value={String(gear.length)} />
 
           <Text style={styles.section}>Equipment</Text>
@@ -407,6 +424,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#fff', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#e5e7eb' },
   cardLabel: { color: '#6b7280', fontSize: 12, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' },
   cardValue: { color: '#111827', fontSize: 20, fontWeight: '700', marginTop: 5 },
+  dueDateSection: { backgroundColor: '#fff', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#e5e7eb', gap: 8 },
   statsRow: { flexDirection: 'row', gap: 12 },
   miniStat: { flex: 1, backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e7eb' },
   miniValue: { fontSize: 28, fontWeight: '800' },
