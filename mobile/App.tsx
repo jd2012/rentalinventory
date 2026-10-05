@@ -22,7 +22,7 @@ import {
 } from './src/lib/api';
 import type { GearItem, Mode, Rental, Stats } from './src/types';
 
-type Screen = 'login' | 'home' | 'scanPass' | 'scanGear' | 'inventoryResult' | 'returnPass';
+type Screen = 'login' | 'home' | 'scanPass' | 'openingRental' | 'scanGear' | 'inventoryResult' | 'returnPass';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('login');
@@ -70,28 +70,28 @@ export default function App() {
   }
 
   async function onPassScanned(code: string) {
-    if (pin.trim()) setAuthToken(pin.trim());
-    setScanStatus(`Pass read: ${code}. Contacting rental system…`);
+    const cleaned = code.trim();
+    setPassId(cleaned);
+    setScanStatus(null);
+    setScreen('openingRental');
+
     try {
-      const opened = await Promise.race([
-        ensureRental(code),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Guest pass request timed out after 8 seconds.')), 8000)
-        ),
-      ]);
+      if (pin.trim()) setAuthToken(pin.trim());
+      const opened = await ensureRental(cleaned);
+
       if (!opened || !opened.id) {
         throw new Error('Rental API responded without a rental ID.');
       }
-      setPassId(code);
+
       setRental(opened);
-      setScanStatus(null);
       setScreen('scanGear');
-      await refreshStats();
+      void refreshStats();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      setScanStatus(`Guest pass error: ${message}`);
-      setScreen('scanPass');
-      throw error;
+      Alert.alert('Could not open rental', message, [
+        { text: 'Cancel', onPress: () => setScreen('home'), style: 'cancel' },
+        { text: 'Try again', onPress: () => setScreen('scanPass') },
+      ]);
     }
   }
 
@@ -155,11 +155,24 @@ export default function App() {
     return (
       <BarcodeScanner
         title="Scan guest pass"
-        statusMessage={scanStatus}
-        singleShot
         onCancel={() => setScreen('home')}
         onScan={onPassScanned}
+        singleShot
       />
+    );
+  }
+
+  if (screen === 'openingRental') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={[styles.page, styles.centerPage]}>
+          <Text style={styles.eyebrow}>GUEST PASS</Text>
+          <Text style={styles.heading}>{passId}</Text>
+          <Text style={styles.subtitle}>Opening rental…</Text>
+          <Text style={styles.note}>Connecting to the rental system. If this fails, you’ll get an error instead of being left on the camera screen.</Text>
+          <SecondaryButton label="Cancel" onPress={() => setScreen('home')} />
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -274,6 +287,7 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f6f7f9' },
   page: { flexGrow: 1, padding: 22, gap: 14 },
+  centerPage: { justifyContent: 'center' },
   logo: { fontSize: 34, fontWeight: '800', marginTop: 48 },
   heading: { fontSize: 30, fontWeight: '800', marginBottom: 8 },
   subtitle: { fontSize: 17, lineHeight: 24, color: '#4b5563' },
