@@ -8,11 +8,12 @@ export function BarcodeScanner({
   onCancel,
 }: {
   title: string;
-  onScan: (barcode: string) => void;
+  onScan: (barcode: string) => void | Promise<void>;
   onCancel: () => void;
 }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [locked, setLocked] = useState(false);
+  const [lastScan, setLastScan] = useState<string | null>(null);
 
   useEffect(() => {
     if (!permission) return;
@@ -33,20 +34,39 @@ export function BarcodeScanner({
     );
   }
 
+  async function handleScan(data: string) {
+    const barcode = data.trim();
+    if (!barcode || locked) return;
+
+    setLocked(true);
+    setLastScan(barcode);
+
+    try {
+      await onScan(barcode);
+    } finally {
+      // If the parent stays on this scanner (for example after an API error),
+      // allow another attempt instead of leaving the camera permanently locked.
+      setTimeout(() => setLocked(false), 900);
+    }
+  }
+
   return (
     <View style={styles.root}>
       <CameraView
         style={StyleSheet.absoluteFill}
         facing="back"
         onBarcodeScanned={locked ? undefined : ({ data }) => {
-          setLocked(true);
-          onScan(data.trim());
+          void handleScan(data);
         }}
       />
       <View style={styles.overlay}>
         <Text style={styles.title}>{title}</Text>
         <View style={styles.target} />
-        <Text style={styles.help}>Center the barcode inside the box.</Text>
+        <Text style={styles.help}>
+          {locked
+            ? `Read ${lastScan ?? 'barcode'} — processing…`
+            : 'Center the barcode inside the box.'}
+        </Text>
         <Pressable style={styles.cancel} onPress={onCancel}><Text style={styles.cancelText}>Cancel</Text></Pressable>
       </View>
     </View>
