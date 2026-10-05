@@ -22,7 +22,7 @@ import {
 } from './src/lib/api';
 import type { GearItem, Mode, Rental, Stats } from './src/types';
 
-type Screen = 'login' | 'home' | 'scanPass' | 'confirmPass' | 'openingRental' | 'scanGear' | 'confirmGear' | 'inventoryResult' | 'returnPass';
+type Screen = 'login' | 'home' | 'scanPass' | 'confirmPass' | 'openingRental' | 'scanGear' | 'confirmGear' | 'rentalReview' | 'inventoryResult' | 'returnPass';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('login');
@@ -238,8 +238,50 @@ export default function App() {
           <Text style={styles.subtitle}>Add this piece of equipment to pass {passId}?</Text>
           <PrimaryButton label="Add equipment" onPress={confirmGear} />
           <SecondaryButton label="Scan again" onPress={() => { setPendingGear(null); setScreen('scanGear'); }} />
-          <SecondaryButton label="Done" onPress={() => { setPendingGear(null); setScreen('home'); }} />
+          <SecondaryButton label="Done" onPress={() => { setPendingGear(null); setScreen('rentalReview'); }} />
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (screen === 'rentalReview') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <ScrollView contentContainerStyle={styles.page}>
+          <Text style={styles.eyebrow}>RENTAL REVIEW</Text>
+          <Text style={styles.heading}>Review order</Text>
+
+          <Card label="Guest pass" value={passId || '—'} />
+          <Card label="Rental ID" value={rental?.id || '—'} />
+          <Card label="Items scanned" value={String(gear.length)} />
+
+          <Text style={styles.section}>Equipment</Text>
+
+          {gear.length === 0 ? (
+            <View style={styles.itemRow}>
+              <Text style={styles.itemBarcode}>No equipment scanned</Text>
+            </View>
+          ) : (
+            gear.map((item, index) => (
+              <View key={`${item.barcode}-${index}`} style={styles.itemRow}>
+                <Text style={styles.itemBarcode}>{item.barcode}</Text>
+                <Text style={styles.muted}>
+                  {[item.type, item.size, item.status].filter(Boolean).join(' • ') || 'Equipment'}
+                </Text>
+              </View>
+            ))
+          )}
+
+          <PrimaryButton
+            label="Finish rental"
+            onPress={() => {
+              setPendingGear(null);
+              setPendingPass(null);
+              setScreen('home');
+            }}
+          />
+          <SecondaryButton label="Add more equipment" onPress={() => setScreen('scanGear')} />
+        </ScrollView>
       </SafeAreaView>
     );
   }
