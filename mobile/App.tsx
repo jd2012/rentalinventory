@@ -25,7 +25,7 @@ import {
 } from './src/lib/api';
 import type { GearItem, Mode, Rental, Stats } from './src/types';
 
-type Screen = 'login' | 'home' | 'scanPass' | 'confirmPass' | 'openingRental' | 'scanGear' | 'confirmGear' | 'rentalReview' | 'inventoryResult' | 'returnPass';
+type Screen = 'login' | 'home' | 'scanPass' | 'confirmPass' | 'chooseDueDate' | 'openingRental' | 'scanGear' | 'confirmGear' | 'rentalReview' | 'inventoryResult' | 'returnPass';
 
 function tomorrow() {
   const value = new Date();
@@ -56,7 +56,6 @@ export default function App() {
   const [pendingPass, setPendingPass] = useState<string | null>(null);
   const [pendingGear, setPendingGear] = useState<string | null>(null);
   const [dueDate, setDueDate] = useState<Date>(() => tomorrow());
-  const [showDatePicker, setShowDatePicker] = useState(false);
 
   async function refreshStats() {
     try {
@@ -90,7 +89,6 @@ export default function App() {
     setPendingPass(null);
     setPendingGear(null);
     setDueDate(tomorrow());
-    setShowDatePicker(false);
     setScreen(newMode === 'checkout' ? 'scanPass' : 'scanGear');
   }
 
@@ -225,41 +223,47 @@ export default function App() {
               style={styles.dateButton}
               onPress={() => {
                 Keyboard.dismiss();
-                setShowDatePicker(true);
+                setScreen('chooseDueDate');
               }}
             >
               <Text style={styles.dateButtonText}>{formatDate(dueDate)}</Text>
               <Text style={styles.dateButtonHint}>Tap to change</Text>
             </Pressable>
-
-            {showDatePicker && (
-              <DateTimePicker
-                value={dueDate}
-                mode="date"
-                minimumDate={new Date()}
-                display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                presentation={Platform.OS === 'android' ? 'dialog' : 'inline'}
-                onValueChange={(_, selectedDate) => {
-                  selectedDate.setHours(12, 0, 0, 0);
-                  setDueDate(selectedDate);
-                  if (Platform.OS === 'android') setShowDatePicker(false);
-                }}
-                onDismiss={() => {
-                  if (Platform.OS === 'android') setShowDatePicker(false);
-                }}
-              />
-            )}
-
-            {Platform.OS === 'ios' && showDatePicker && (
-              <SecondaryButton label="Done choosing date" onPress={() => setShowDatePicker(false)} />
-            )}
-
-            <Text style={styles.note}>Defaults to tomorrow. Tap the date to choose a different return date.</Text>
+            <Text style={styles.note}>Defaults to tomorrow.</Text>
           </View>
 
           <PrimaryButton label="Confirm pass" onPress={confirmPass} />
           <SecondaryButton label="Scan again" onPress={() => { setPendingPass(null); setScreen('scanPass'); }} />
           <SecondaryButton label="Cancel" onPress={() => { setPendingPass(null); setScreen('home'); }} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (screen === 'chooseDueDate') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={[styles.page, styles.centerPage]}>
+          <Text style={styles.eyebrow}>DUE DATE</Text>
+          <Text style={styles.heading}>Choose return date</Text>
+          <Text style={styles.subtitle}>Selected: {formatDate(dueDate)}</Text>
+
+          <View style={styles.pickerCard}>
+            <DateTimePicker
+              value={dueDate}
+              mode="date"
+              minimumDate={new Date()}
+              display={Platform.OS === 'ios' ? 'inline' : 'default'}
+              presentation={Platform.OS === 'android' ? 'dialog' : 'inline'}
+              onValueChange={(_, selectedDate) => {
+                selectedDate.setHours(12, 0, 0, 0);
+                setDueDate(selectedDate);
+              }}
+            />
+          </View>
+
+          <PrimaryButton label="Use this date" onPress={() => setScreen('confirmPass')} />
+          <SecondaryButton label="Cancel" onPress={() => setScreen('confirmPass')} />
         </View>
       </SafeAreaView>
     );
@@ -475,6 +479,7 @@ const styles = StyleSheet.create({
   dateButton: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 12, padding: 14, backgroundColor: '#f9fafb' },
   dateButtonText: { fontSize: 22, fontWeight: '800', color: '#111827' },
   dateButtonHint: { marginTop: 3, color: '#6b7280', fontSize: 12 },
+  pickerCard: { backgroundColor: '#fff', borderRadius: 16, padding: 12, borderWidth: 1, borderColor: '#e5e7eb' },
   statsRow: { flexDirection: 'row', gap: 12 },
   miniStat: { flex: 1, backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e7eb' },
   miniValue: { fontSize: 28, fontWeight: '800' },
