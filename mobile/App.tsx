@@ -255,6 +255,8 @@ export default function App() {
               minimumDate={new Date()}
               display={Platform.OS === 'ios' ? 'inline' : 'default'}
               presentation={Platform.OS === 'android' ? 'dialog' : 'inline'}
+              themeVariant="light"
+              accentColor="#2563eb"
               onValueChange={(_, selectedDate) => {
                 selectedDate.setHours(12, 0, 0, 0);
                 setDueDate(selectedDate);
