@@ -25,7 +25,7 @@ import {
 } from './src/lib/api';
 import type { GearItem, Mode, Rental, Stats } from './src/types';
 
-type Screen = 'login' | 'home' | 'scanPass' | 'confirmPass' | 'chooseDueDate' | 'openingRental' | 'scanGear' | 'confirmGear' | 'rentalReview' | 'inventoryResult' | 'returnPass';
+type Screen = 'login' | 'home' | 'scanPass' | 'confirmPass' | 'chooseDueDate' | 'openingRental' | 'scanGear' | 'confirmGear' | 'gearAdded' | 'rentalReview' | 'inventoryResult' | 'returnPass';
 
 function tomorrow() {
   const value = new Date();
@@ -173,7 +173,7 @@ export default function App() {
       const item = await lookupGear(code);
       setGear((current) => current.some((g) => g.barcode === code) ? current : [...current, item]);
       setPendingGear(null);
-      setScreen('scanGear');
+      setScreen('gearAdded');
       await refreshStats();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -302,7 +302,32 @@ export default function App() {
           <Text style={styles.subtitle}>Add this piece of equipment to pass {passId}?</Text>
           <PrimaryButton label="Add equipment" onPress={confirmGear} />
           <SecondaryButton label="Scan again" onPress={() => { setPendingGear(null); setScreen('scanGear'); }} />
-          <SecondaryButton label="Done" onPress={() => { setPendingGear(null); setScreen('rentalReview'); }} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (screen === 'gearAdded') {
+    const lastItem = gear[gear.length - 1];
+
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={[styles.page, styles.centerPage]}>
+          <Text style={styles.eyebrow}>EQUIPMENT ADDED</Text>
+          <Text style={styles.heading}>Item confirmed</Text>
+
+          {lastItem ? (
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>Equipment</Text>
+              <Text style={styles.cardValue}>{lastItem.barcode}</Text>
+              <Text style={styles.muted}>
+                {[lastItem.type, lastItem.size].filter(Boolean).join(' • ') || 'Added to rental'}
+              </Text>
+            </View>
+          ) : null}
+
+          <PrimaryButton label="Scan another piece" onPress={() => setScreen('scanGear')} />
+          <SecondaryButton label="Done" onPress={() => setScreen('rentalReview')} />
         </View>
       </SafeAreaView>
     );
