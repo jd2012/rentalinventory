@@ -25,7 +25,7 @@ import {
 } from './src/lib/api';
 import type { GearItem, Mode, Rental, Stats } from './src/types';
 
-type Screen = 'login' | 'home' | 'scanPass' | 'confirmPass' | 'chooseDueDate' | 'openingRental' | 'scanGear' | 'confirmGear' | 'gearAdded' | 'rentalReview' | 'inventoryResult' | 'returnPass';
+type Screen = 'login' | 'home' | 'scanPass' | 'confirmPass' | 'chooseDueDate' | 'openingRental' | 'scanGear' | 'confirmGear' | 'gearAdded' | 'rentalReview' | 'inventoryResult' | 'returnPass' | 'returnResult';
 
 function tomorrow() {
   const value = new Date();
@@ -50,6 +50,8 @@ export default function App() {
   const [gear, setGear] = useState<GearItem[]>([]);
   const [inventoryItem, setInventoryItem] = useState<GearItem | null>(null);
   const [returnPassItems, setReturnPassItems] = useState<Array<Record<string, unknown>>>([]);
+  const [returnItem, setReturnItem] = useState<GearItem | null>(null);
+  const [returnError, setReturnError] = useState<string | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [busy, setBusy] = useState(false);
   const [scanStatus, setScanStatus] = useState<string | null>(null);
@@ -86,6 +88,8 @@ export default function App() {
     setGear([]);
     setInventoryItem(null);
     setReturnPassItems([]);
+    setReturnItem(null);
+    setReturnError(null);
     setPendingPass(null);
     setPendingGear(null);
     setDueDate(tomorrow());
@@ -136,21 +140,43 @@ export default function App() {
       }
 
       if (mode === 'return') {
+        setReturnError(null);
+        setReturnItem(null);
+
+        // Capture the checked-out item before /api/return/scan changes its status.
+        let scannedItem: GearItem | null = null;
+        try {
+          const lookup = await lookupGear(code);
+          if (lookup.status === 'OUT') scannedItem = lookup;
+        } catch {
+          // The code may be a guest pass rather than equipment, so continue.
+        }
+
         const result = await returnScan(code);
+
         if (result.kind === 'gear') {
-          setGear((current) => current.some((g) => g.barcode === code) ? current : [...current, { barcode: code, status: 'RETURNED' }]);
-          setScreen('scanGear');
-          await refreshStats();
+          const returnedItem: GearItem = scannedItem
+            ? { ...scannedItem, status: 'RETURNED' }
+            : { barcode: code, status: 'RETURNED' };
+
+          setReturnItem(returnedItem);
+          setGear((current) =>
+            current.some((g) => g.barcode === code) ? current : [...current, returnedItem]
+          );
+          setScreen('returnResult');
+          void refreshStats();
           return;
         }
+
         if (result.kind === 'pass') {
           setPassId(result.passId);
           setReturnPassItems(result.items);
           setScreen('returnPass');
           return;
         }
-        Alert.alert('Not found', 'That barcode is not currently checked out.');
-        setScreen('scanGear');
+
+        setReturnError('That barcode is not currently checked out.');
+        setScreen('returnResult');
         return;
       }
 
@@ -158,7 +184,16 @@ export default function App() {
       setInventoryItem(item);
       setScreen('inventoryResult');
     } catch (error) {
-      Alert.alert('Scan failed', error instanceof Error ? error.message : 'Unknown error');
+      const message = error instanceof Error ? error.message : 'Unknown error';
+
+      if (mode === 'return') {
+        setReturnError(message);
+        setReturnItem(null);
+        setScreen('returnResult');
+        return;
+      }
+
+      Alert.alert('Scan failed', message);
       setScreen(mode === 'checkout' ? 'scanGear' : 'home');
     }
   }
@@ -378,6 +413,58 @@ export default function App() {
     );
   }
 
+  if (screen === 'returnResult') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <ScrollView contentContainerStyle={styles.page}>
+          {returnError ? (
+            <>
+              <Text style={styles.eyebrow}>RETURN EQUIPMENT</Text>
+              <Text style={styles.heading}>Could not return item</Text>
+              <View style={styles.errorCard}>
+                <Text style={styles.errorText}>{returnError}</Text>
+              </View>
+              <PrimaryButton
+                label="Scan again"
+                onPress={() => {
+                  setReturnError(null);
+                  setReturnItem(null);
+                  setScreen('scanGear');
+                }}
+              />
+              <SecondaryButton label="Home" onPress={() => setScreen('home')} />
+            </>
+          ) : (
+            <>
+              <Text style={styles.eyebrow}>RETURN COMPLETE</Text>
+              <Text style={styles.heading}>Equipment returned</Text>
+
+              {returnItem ? (
+                <>
+                  <Card label="Equipment" value={returnItem.barcode} />
+                  {returnItem.type ? <Card label="Type" value={returnItem.type} /> : null}
+                  {returnItem.size ? <Card label="Size" value={returnItem.size} /> : null}
+                  {returnItem.passId ? <Card label="Guest pass" value={returnItem.passId} /> : null}
+                  <Card label="Status" value="RETURNED" />
+                </>
+              ) : null}
+
+              <PrimaryButton
+                label="Scan another return"
+                onPress={() => {
+                  setReturnItem(null);
+                  setReturnError(null);
+                  setScreen('scanGear');
+                }}
+              />
+              <SecondaryButton label="Done" onPress={() => setScreen('home')} />
+            </>
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   if (screen === 'returnPass') {
     return (
       <SafeAreaView style={styles.safe}>
@@ -388,6 +475,9 @@ export default function App() {
           {returnPassItems.map((item, i) => (
             <View key={`${String(item.gearId ?? i)}-${i}`} style={styles.itemRow}>
               <Text style={styles.itemBarcode}>{String(item.gearId ?? 'Equipment')}</Text>
+              <Text style={styles.muted}>
+                {[item.gearType, item.size].filter(Boolean).map(String).join(' • ') || 'Checked out'}
+              </Text>
             </View>
           ))}
           <PrimaryButton label={busy ? 'Returning…' : 'Return all items'} onPress={returnWholePass} disabled={busy} />
@@ -507,6 +597,8 @@ const styles = StyleSheet.create({
   dateButtonText: { fontSize: 22, fontWeight: '800', color: '#111827' },
   dateButtonHint: { marginTop: 3, color: '#6b7280', fontSize: 12 },
   pickerCard: { backgroundColor: '#fff', borderRadius: 16, padding: 12, borderWidth: 1, borderColor: '#e5e7eb' },
+  errorCard: { backgroundColor: '#fff', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#fecaca' },
+  errorText: { color: '#991b1b', fontSize: 16, lineHeight: 22, fontWeight: '600' },
   statsRow: { flexDirection: 'row', gap: 12 },
   miniStat: { flex: 1, backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e7eb' },
   miniValue: { fontSize: 28, fontWeight: '800' },
