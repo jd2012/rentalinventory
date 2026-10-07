@@ -25,7 +25,7 @@ import {
 } from './src/lib/api';
 import type { GearItem, Mode, Rental, Stats } from './src/types';
 
-type Screen = 'login' | 'home' | 'scanPass' | 'confirmPass' | 'chooseDueDate' | 'openingRental' | 'scanGear' | 'confirmGear' | 'gearAdded' | 'rentalReview' | 'inventoryResult' | 'returnPass' | 'returnResult';
+type Screen = 'login' | 'home' | 'scanPass' | 'confirmPass' | 'openingRental' | 'scanGear' | 'confirmGear' | 'gearAdded' | 'rentalReview' | 'inventoryResult' | 'returnPass' | 'returnResult';
 
 function tomorrow() {
   const value = new Date();
@@ -252,55 +252,9 @@ export default function App() {
           <Text style={styles.heading}>{pendingPass}</Text>
           <Text style={styles.subtitle}>Use this guest pass for the rental?</Text>
 
-          <View style={styles.dueDateSection}>
-            <Text style={styles.cardLabel}>Due date</Text>
-            <Pressable
-              style={styles.dateButton}
-              onPress={() => {
-                Keyboard.dismiss();
-                setScreen('chooseDueDate');
-              }}
-            >
-              <Text style={styles.dateButtonText}>{formatDate(dueDate)}</Text>
-              <Text style={styles.dateButtonHint}>Tap to change</Text>
-            </Pressable>
-            <Text style={styles.note}>Defaults to tomorrow.</Text>
-          </View>
-
           <PrimaryButton label="Confirm pass" onPress={confirmPass} />
           <SecondaryButton label="Scan again" onPress={() => { setPendingPass(null); setScreen('scanPass'); }} />
           <SecondaryButton label="Cancel" onPress={() => { setPendingPass(null); setScreen('home'); }} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (screen === 'chooseDueDate') {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={[styles.page, styles.centerPage]}>
-          <Text style={styles.eyebrow}>DUE DATE</Text>
-          <Text style={styles.heading}>Choose return date</Text>
-          <Text style={styles.subtitle}>Selected: {formatDate(dueDate)}</Text>
-
-          <View style={styles.pickerCard}>
-            <DateTimePicker
-              value={dueDate}
-              mode="date"
-              minimumDate={new Date()}
-              display={Platform.OS === 'ios' ? 'inline' : 'default'}
-              presentation={Platform.OS === 'android' ? 'dialog' : 'inline'}
-              themeVariant="light"
-              accentColor="#2563eb"
-              onValueChange={(_, selectedDate) => {
-                selectedDate.setHours(12, 0, 0, 0);
-                setDueDate(selectedDate);
-              }}
-            />
-          </View>
-
-          <PrimaryButton label="Use this date" onPress={() => setScreen('confirmPass')} />
-          <SecondaryButton label="Cancel" onPress={() => setScreen('confirmPass')} />
         </View>
       </SafeAreaView>
     );
@@ -379,7 +333,28 @@ export default function App() {
 
           <Card label="Guest pass" value={passId || '—'} />
           <Card label="Rental ID" value={rental?.id || '—'} />
-          <Card label="Due date" value={formatDate(dueDate)} />
+          <View style={styles.dueDateSection}>
+            <Text style={styles.cardLabel}>Due date</Text>
+            <Text style={styles.dateButtonText}>{formatDate(dueDate)}</Text>
+            <Text style={styles.note}>Defaults to tomorrow. Choose a different return date if needed.</Text>
+
+            <View style={styles.pickerCard}>
+              <DateTimePicker
+                value={dueDate}
+                mode="date"
+                minimumDate={new Date()}
+                display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                presentation={Platform.OS === 'android' ? 'dialog' : 'inline'}
+                themeVariant="light"
+                accentColor="#2563eb"
+                onValueChange={(_, selectedDate) => {
+                  selectedDate.setHours(12, 0, 0, 0);
+                  setDueDate(selectedDate);
+                }}
+              />
+            </View>
+          </View>
+
           <Card label="Items scanned" value={String(gear.length)} />
 
           <Text style={styles.section}>Equipment</Text>
