@@ -4,13 +4,16 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Kids Rental Tracker</title>
-  <link rel="stylesheet" href="./styles.css"/>
+  <link rel="stylesheet" href="./styles.css?v=7"/>
 </head>
 <body>
+  <div id="locationModal" class="modal show" role="dialog" aria-modal="true" aria-labelledby="locationTitle">
+    <div class="modal-card"><h1 id="locationTitle">Select a resort</h1><div id="locationChoices">Loading locations…</div></div>
+  </div>
   <header class="topbar">
     <div>
       <div class="brand-title">Kids Rental Tracker</div>
-      <div class="brand-sub">Multi-device website • Scan-first • Lift Pass ⇄ Gear</div>
+      <div id="selectedLocation" class="brand-sub">Choose your resort and shop</div><button id="changeShop" type="button">Change shop</button>
     </div>
     <div id="dbStatus" class="status">Loading…</div>
   </header>
@@ -19,7 +22,8 @@
     <button class="tab active" data-tab="checkout">Check Out</button>
     <button class="tab" data-tab="return">Return</button>
     <button class="tab" data-tab="lookup">Lookup</button>
-    <button class="tab" data-tab="admin">Admin</button>
+    <button class="tab" data-tab="inventory">Inventory &amp; labels</button>
+    <button class="tab" data-tab="admin">Database</button>
   </nav>
 
   <main class="main">
@@ -61,7 +65,7 @@
 
         <div class="card">
           <h2>2) Scan Gear</h2>
-          <p class="hint">Scan each gear inventory barcode. If a gear item is already OUT, you can transfer it to this rental.</p>
+          <p class="hint">Scan each gear inventory barcode. Confirm each item before adding it. Already assigned equipment must be returned before reassignment.</p>
 
           <div class="scanrow">
             <input id="coGear" class="scan" placeholder="Scan GearID (inventory barcode)" disabled/>
@@ -96,8 +100,7 @@
           </div>
 
           <div class="divider"></div>
-          <h3>Result</h3>
-          <div id="reResult" class="list"></div>
+
         </div>
 
         <div class="card">
@@ -124,6 +127,7 @@
       </div>
     </section>
 
+    <section id="tab-returnResult" class="panel"><div class="card"><h2>Return result</h2><div id="reResult" class="list"></div><button id="returnAgain" class="primary">Scan another return</button><button id="returnDone">Done</button></div></section>
     <!-- LOOKUP -->
     <section id="tab-lookup" class="panel">
       <div class="grid2">
@@ -159,66 +163,51 @@
       </div>
     </section>
 
-    <!-- ADMIN -->
-    <section id="tab-admin" class="panel">
-      <div class="grid2">
-        <div class="card">
-          <h2>Admin</h2>
-          <p class="hint">Data is stored locally in this browser (no internet required). Use Export daily if you need a backup.</p>
-
-          <div class="divider"></div>
-
-          <div class="row">
-            <button id="exJson" class="primary">Export JSON Backup</button>
-            <button id="wipe" class="danger">Wipe Local Data</button>
-          </div>
-
-          <div class="divider"></div>
-
-          <h3>Import JSON Backup</h3>
-          <div class="fileRow">
-            <input id="imJsonFile" type="file" accept="application/json"/>
-            <button id="imJson" class="secondary">Import</button>
-          </div>
-
-          <div class="divider"></div>
-          <h3>Admin Log</h3>
-          <div id="adminLog" class="list"></div>
-        </div>
-
-        <div class="card">
-          <h2>Notes</h2>
-          <div class="item">
-            <div class="left">
-              <div class="title">No installs needed</div>
-              <div class="sub">This is just HTML/CSS/JS. You can open index.html in a browser.</div>
-            </div>
-            <div class="badge good">OK</div>
-          </div>
-
-          <div class="item">
-            <div class="left">
-              <div class="title">Each device is independent</div>
-              <div class="sub">Because data is stored locally in the browser, each POS has its own list unless you deploy a shared server.</div>
-            </div>
-            <div class="badge warn">FYI</div>
-          </div>
-
-          <div class="item">
-            <div class="left">
-              <div class="title">Barcode scanners “just work”</div>
-              <div class="sub">Most scanners type into the focused box and press Enter.</div>
-            </div>
-            <div class="badge good">TIP</div>
-          </div>
-        </div>
+    <section id="tab-review" class="panel"><div class="card">
+      <h2>Review order</h2><div id="reviewSummary"></div><div id="reviewItems" class="list"></div>
+      <label>Return due date <input id="reviewDue" type="date" required></label>
+      <p>Equipment saves when confirmed. Finish rental saves the due date.</p>
+      <button id="finishRental" class="primary">Finish rental</button><button id="reviewBack">Add more equipment</button>
+    </div></section>
+    <section id="tab-added" class="panel"><div class="card"><h2>Item confirmed</h2><p id="addedGear"></p><button id="scanMore" class="primary">Scan another piece</button><button id="addedDone">Done — review order</button></div></section>
+    <section id="tab-inventory" class="panel"><div class="grid2">
+      <div class="card"><h2>Add inventory item</h2><form id="inventoryForm">
+        <label>Inventory barcode <input name="gearId" required maxlength="120" autocomplete="off"></label>
+        <label>Type <select name="gearType"><option>Ski</option><option>Snowboard</option><option>Boot</option><option>Pole</option><option>Helmet</option><option>Other</option></select></label>
+        <label>Size <input name="size" maxlength="80"></label>
+        <label>End of life <input name="endOfLifeDate" type="date"></label>
+        <label>Service status <select name="status"><option>ACTIVE</option><option>REPAIR</option><option>RETIRED</option><option>LOST</option></select></label>
+        <label>Notes <textarea name="notes" maxlength="4000"></textarea></label>
+        <button class="primary">Create item</button>
+      </form></div>
+      <div class="card"><h2>Inventory &amp; barcode labels</h2>
+        <div class="scanrow"><input id="inventoryQuery" type="search" maxlength="120" autocomplete="off" placeholder="Barcode, type, or size" aria-label="Search inventory"><button id="inventorySearch" type="button">Search</button><button id="clearInventorySearch" type="button">Clear search</button></div>
+        <p id="inventoryFeedback" role="status" aria-live="polite"></p>
+        <p>Select items across pages. Labels encode the exact inventory barcode.</p>
+        <div id="inventoryRows" class="list"></div><button id="inventoryPrev">Previous</button><button id="inventoryNext">Next</button>
+        <p id="selectedCount" aria-live="polite">0 selected</p>
+        <button id="selectPage">Select this page</button><button id="clearSelection">Clear selection</button>
+<p>Select different items below, then print one label per item. Sheets hold 30 labels; extra items continue on the next page.</p>
+        <label>Skip used labels (0–29) <input id="labelOffset" type="number" min="0" max="29" value="0"></label>
+        <button id="printSelected" class="primary">Print selected barcodes</button><button id="printAll">Print all matching barcodes</button>
+        <p>Sheets: US Letter, 30 labels (3 × 10), 2⅝ × 1 inch. Individual labels: 3 × 1 inch. Print at 100% scale with headers/footers off. Preview before printing.</p>
+      </div></div></section>
+    <section id="tab-admin" class="panel"><div class="card">
+      <h2>Database administration</h2><p>Authorized administrators can browse every record. Checkout and return actions preserve assignment history.</p>
+      <form id="adminLogin"><label>Administrator key <input id="adminKey" type="password" required autocomplete="off"></label><button>Unlock database</button><button id="adminLock" type="button">Lock</button></form>
+      <div id="adminContent" hidden>
+        <label>Records <select id="adminTable"><option value="inventory">Inventory</option><option value="rentals">Rentals</option><option value="items">Rental items &amp; assignment history</option><option value="meta">System metadata</option></select></label>
+        <button id="adminRefresh">Refresh</button><button id="exJson">Export JSON backup</button><button id="exCsv">Export rental CSV</button>
+        <div class="table-scroll"><table id="adminRecords"></table></div>
+        <button id="adminPrev">Previous</button><span id="adminPage"></span><button id="adminNext">Next</button>
+        <form id="recordEditor" hidden><h3>Edit record</h3><div id="recordFields"></div><button class="primary">Save changes</button><button id="cancelEdit" type="button">Cancel</button></form>
       </div>
-    </section>
+    </div></section>
   </main>
 
   <footer class="footer">
     <div>Scan-first workflow • Lift Pass ⇄ Gear</div>
-    <div>Local-only storage (no internet)</div>
+    <div>Shared rental database • Internet required</div>
   </footer>
 
   <!-- Modal -->
@@ -234,7 +223,9 @@
   </div>
 
   <script src="./config.js?v=5"></script>
-  <script src="./app.js?v=5"></script>
+  <script src="./vendor/JsBarcode.all.min.js"></script>
+  <script src="./labels.js"></script>
+  <script src="./app.js?v=12"></script>
 <!-- PIN Modal -->
 <div id="pinModal" class="modal" role="dialog" aria-modal="true">
   <div class="modal-card">

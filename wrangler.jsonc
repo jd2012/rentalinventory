@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "kids-rentals-api",
+  "main": "worker/worker.js",
+  "compatibility_date": "2026-08-06",
+  "assets": {
+    "directory": "site",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/api/*"
+    ]
+  },
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "SHOP_TIME_ZONE": "America/Denver",
+    "ALLOWED_ORIGINS": "https://rentals.jd2012.work,https://rentalinventory.pages.dev"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "kids-rentals-db",
+      "database_id": "90debba9-f69c-4cf3-8d4f-1f069b57caba",
+      "migrations_dir": "worker/migrations"
+    }
+  ],
+  "account_id": "03565a01ef717c4143de646bd4af17c8",
+  "routes": [
+    {
+      "pattern": "rentals.jd2012.work/api/*",
+      "zone_name": "jd2012.work"
+    }
+  ],
+  "workers_dev": true
+}

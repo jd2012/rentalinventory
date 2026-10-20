@@ -1,0 +1,1 @@
+{"name":"rental-inventory","private":true,"type":"module","scripts":{"test":"node --test tests/*.test.mjs","dev":"wrangler dev","deploy:dry-run":"wrangler deploy --dry-run","deploy":"wrangler deploy","vendor":"node scripts/vendor.mjs"},"devDependencies":{"@playwright/test":"^1.64.1","jsbarcode":"^3.12.3","miniflare":"^4.20260730.0","wrangler":"^4.127.1"}}

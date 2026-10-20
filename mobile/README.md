@@ -1,4 +1,4 @@
-# Rental Inventory Mobile
+# Rental Inventory Companion Apps
 
 Cross-platform iPhone + Android client for the existing Kids Rental Tracker backend.
 
@@ -17,7 +17,7 @@ No Django migration is required for the mobile client.
 
 - Authenticate using the existing shop PIN (`Authorization: Bearer <PIN>`)
 - Dashboard stats
-- Checkout: scan guest pass, then scan gear
+- Checkout: scan and confirm guest pass, then scan and confirm gear
 - Each checkout scan is saved immediately through `/api/items/add`
 - Return a single item by scanning gear
 - Scan a guest pass to view all outstanding gear and return everything
@@ -62,3 +62,7 @@ eas build --platform ios
 ```
 
 Google Play distribution requires a Play Console developer account. TestFlight/App Store distribution requires an Apple Developer account.
+
+## Product boundary
+
+These apps are companions to the website, maintained independently in this repository. Keep mobile scanning confirmations. Database administration, inventory management and label printing live in `../site/`. Both clients share the API in `../worker/`; status and due-date rules remain server-owned.

@@ -1,0 +1,12 @@
+node_modules/
+mobile/node_modules/
+mobile/.expo/
+.wrangler/
+.dev.vars
+.env
+.env.*
+!.env.example
+test-results/
+backups/
+
+.DS_Store

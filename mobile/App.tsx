@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Alert,
   Keyboard,
@@ -15,17 +15,19 @@ import DateTimePicker from '@expo/ui/community/datetime-picker';
 import { BarcodeScanner } from './src/components/BarcodeScanner';
 import {
   addGear,
+  getRental,
+  finishRental,
   ensureRental,
   getStats,
   lookupGear,
   returnAllForPass,
   returnScan,
   setAuthToken,
-  verifyPin,
+  verifyPin, getLocations, setShopId, type Locations,
 } from './src/lib/api';
 import type { GearItem, Mode, Rental, Stats } from './src/types';
 
-type Screen = 'login' | 'home' | 'scanPass' | 'confirmPass' | 'openingRental' | 'scanGear' | 'confirmGear' | 'gearAdded' | 'rentalReview' | 'inventoryResult' | 'returnPass' | 'returnResult';
+type Screen = 'resort' | 'shop' | 'login' | 'home' | 'scanPass' | 'confirmPass' | 'openingRental' | 'scanGear' | 'confirmGear' | 'gearAdded' | 'rentalReview' | 'inventoryResult' | 'returnPass' | 'returnResult';
 
 function tomorrow() {
   const value = new Date();
@@ -42,7 +44,13 @@ function formatDate(value: Date) {
 }
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>('login');
+  const [screen, setScreen] = useState<Screen>('resort');
+  const [locations, setLocations] = useState<Locations | null>(null);
+  const [locationError, setLocationError] = useState('');
+  const [resortId, setResortId] = useState('');
+  const [shopName, setShopName] = useState('');
+  async function loadLocations() { try { setLocationError('');setLocations(await getLocations()); } catch { setLocationError('Could not load locations. Check your connection and try again.'); } }
+  useEffect(()=>{void loadLocations();},[]);
   const [pin, setPin] = useState('');
   const [mode, setMode] = useState<Mode>('checkout');
   const [passId, setPassId] = useState('');
@@ -118,6 +126,9 @@ export default function App() {
       }
 
       setRental(opened);
+      const details = await getRental(opened.id);
+      setGear(details.items.filter(i => i.status === 'OUT').map(i => ({ barcode: i.gearId, type: i.gearType, size: i.size, status: i.status, dueDate: i.dueDate })));
+      if (details.rental.dueDate) setDueDate(new Date(details.rental.dueDate + 'T12:00:00'));
       setScreen('scanGear');
       void refreshStats();
     } catch (error) {
@@ -199,7 +210,8 @@ export default function App() {
   }
 
   async function confirmGear() {
-    if (!pendingGear || !rental || !passId) return;
+    if (!pendingGear || !rental || !passId || busy) return;
+    setBusy(true);
     const code = pendingGear;
 
     try {
@@ -215,7 +227,21 @@ export default function App() {
       Alert.alert('Could not add equipment', message);
       setPendingGear(null);
       setScreen('scanGear');
-    }
+    } finally { setBusy(false); }
+  }
+
+  async function finishOrder() {
+    if (!rental || busy) return;
+    setBusy(true);
+    try {
+      await finishRental(rental.id, formatDate(dueDate));
+      setPendingGear(null);
+      setPendingPass(null);
+      await refreshStats();
+      setScreen('home');
+    } catch (error) {
+      Alert.alert('Could not finish rental', error instanceof Error ? error.message : 'Unknown error');
+    } finally { setBusy(false); }
   }
 
   async function returnWholePass() {
@@ -291,7 +317,7 @@ export default function App() {
           <Text style={styles.eyebrow}>CONFIRM EQUIPMENT</Text>
           <Text style={styles.heading}>{pendingGear}</Text>
           <Text style={styles.subtitle}>Add this piece of equipment to pass {passId}?</Text>
-          <PrimaryButton label="Add equipment" onPress={confirmGear} />
+          <PrimaryButton label={busy ? "Adding…" : "Add equipment"} disabled={busy} onPress={confirmGear} />
           <SecondaryButton label="Scan again" onPress={() => { setPendingGear(null); setScreen('scanGear'); }} />
         </View>
       </SafeAreaView>
@@ -375,12 +401,9 @@ export default function App() {
           )}
 
           <PrimaryButton
-            label="Finish rental"
-            onPress={() => {
-              setPendingGear(null);
-              setPendingPass(null);
-              setScreen('home');
-            }}
+            label={busy ? 'Saving…' : 'Finish rental'}
+            disabled={busy || gear.length === 0}
+            onPress={finishOrder}
           />
           <SecondaryButton label="Add more equipment" onPress={() => setScreen('scanGear')} />
         </ScrollView>
@@ -472,6 +495,7 @@ export default function App() {
           <Card label="Size" value={inventoryItem.size ?? '—'} />
           <Card label="Status" value={inventoryItem.status ?? '—'} />
           {inventoryItem.passId && <Card label="Checked out to pass" value={inventoryItem.passId} />}
+          {inventoryItem.dueDate && <Card label={inventoryItem.overdue ? 'Overdue since' : 'Due date'} value={inventoryItem.dueDate} />}
           {inventoryItem.endOfLifeDate && <Card label="End of life" value={inventoryItem.endOfLifeDate} />}
           <PrimaryButton label="Scan another" onPress={() => { setInventoryItem(null); setScreen('scanGear'); }} />
           <SecondaryButton label="Home" onPress={() => setScreen('home')} />
@@ -480,12 +504,23 @@ export default function App() {
     );
   }
 
+  if (screen === 'resort' || screen === 'shop') {
+    return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}>
+      <Text style={styles.heading}>{screen==='resort'?'Select a resort':'Select a shop'}</Text>
+      {locationError ? <><Text style={styles.note}>{locationError}</Text><SecondaryButton label="Try again" onPress={loadLocations}/></> : !locations ? <Text>Loading locations…</Text> : null}
+      {screen==='resort' ? locations?.resorts.map(r=><PrimaryButton key={r.id} label={r.name} onPress={()=>{setResortId(r.id);setScreen('shop');}}/>) : <>
+        <Text style={styles.subtitle}>{locations?.resorts.find(r=>r.id===resortId)?.name}</Text>
+        {locations?.shops.filter(s=>s.resortId===resortId).map(s=><PrimaryButton key={s.id} label={s.name} onPress={()=>{setShopId(s.id);setShopName(s.name);setScreen('login');}}/>)}
+        <SecondaryButton label="Back to resorts" onPress={()=>setScreen('resort')}/>
+      </>}
+    </ScrollView></SafeAreaView>;
+  }
   if (screen === 'login') {
     return (
       <SafeAreaView style={styles.safe}>
         <Pressable style={styles.flex} onPress={Keyboard.dismiss}>
           <View style={styles.page}>
-          <Text style={styles.logo}>Rental Inventory</Text>
+          <Text style={styles.logo}>Rental Inventory</Text><Text style={styles.subtitle}>{locations?.resorts.find(r=>r.id===resortId)?.name} · {shopName}</Text><SecondaryButton label="Change shop" onPress={()=>setScreen('resort')}/>
           <Text style={styles.subtitle}>Enter the shop PIN to connect this device to the rental system.</Text>
           <TextInput
             value={pin}
@@ -508,7 +543,7 @@ export default function App() {
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.page}>
         <Text style={styles.eyebrow}>RENTAL INVENTORY</Text>
-        <Text style={styles.heading}>Shop dashboard</Text>
+        <Text style={styles.heading}>{shopName}</Text><Text style={styles.subtitle}>{locations?.resorts.find(r=>r.id===resortId)?.name}</Text><SecondaryButton label="Change shop" onPress={()=>{setShopId('');setAuthToken('');setPin('');setStats(null);setRental(null);setGear([]);setPassId('');setScreen('resort');}}/>
         {stats && (
           <View style={styles.statsRow}>
             <MiniStat label="Items out" value={String(stats.totalOut)} />

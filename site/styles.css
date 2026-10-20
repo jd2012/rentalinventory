@@ -164,3 +164,17 @@ button:disabled{opacity:.45; cursor:not-allowed}
 .modal-body{margin-top:10px; color: var(--text); font-size:13px; line-height:1.35}
 .modal-actions{display:flex; justify-content:flex-end; gap:10px; margin-top:14px}
 .fileRow{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+
+label{display:block;margin:12px 0;color:var(--text)}
+label input,label select,label textarea{display:block;width:100%;max-width:520px;margin-top:6px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font:inherit}
+input[type=checkbox]{width:20px;height:20px;flex-shrink:0}
+button{cursor:pointer}button:disabled{cursor:default;opacity:.5}
+.table-scroll{overflow:auto;max-height:65vh;margin:18px 0}table{border-collapse:collapse;width:100%}th,td{text-align:left;border-bottom:1px solid var(--line);padding:10px;max-width:320px;overflow-wrap:anywhere}th{position:sticky;top:0;background:var(--card)}td button{display:block;margin:5px 0;white-space:nowrap}
+[hidden]{display:none!important}#labelPreview{position:fixed;inset:2vh 2vw;width:96vw;height:96vh;background:white;z-index:100;border:2px solid #64748b;border-radius:8px}#inventoryRows .item{flex-wrap:wrap}#dbStatus{max-width:55%;overflow-wrap:anywhere}
+@media(max-width:650px){.tabs{flex-wrap:wrap}.scanrow{flex-wrap:wrap}.scanrow input{min-width:0;width:100%}}
+
+#dbStatus{flex-shrink:0;min-width:70px;white-space:normal}.scanrow>input{padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font:inherit}input[type=date]{color-scheme:dark}
+#adminRecords{min-width:1100px}#adminRecords th{white-space:nowrap;overflow-wrap:normal}#adminRecords td{min-width:90px}
+
+#locationChoices { display:grid; gap:16px; margin-top:24px; }
+#locationModal { z-index:10000; }
