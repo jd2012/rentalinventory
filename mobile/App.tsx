@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import DateTimePicker from '@expo/ui/community/datetime-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BarcodeScanner } from './src/components/BarcodeScanner';
 import {
   addGear,
@@ -49,8 +50,32 @@ export default function App() {
   const [locationError, setLocationError] = useState('');
   const [resortId, setResortId] = useState('');
   const [shopName, setShopName] = useState('');
-  async function loadLocations() { try { setLocationError('');setLocations(await getLocations()); } catch { setLocationError('Could not load locations. Check your connection and try again.'); } }
-  useEffect(()=>{void loadLocations();},[]);
+  async function loadLocations() {
+    try {
+      setLocationError('');
+      const loaded = await getLocations();
+      setLocations(loaded);
+
+      const savedShopId = await AsyncStorage.getItem('selectedShopId');
+      if (savedShopId) {
+        const savedShop = loaded.shops.find((shop) => shop.id === savedShopId);
+        if (savedShop) {
+          setResortId(savedShop.resortId);
+          setShopName(savedShop.name);
+          setShopId(savedShop.id);
+          setScreen('login');
+          return;
+        }
+        await AsyncStorage.removeItem('selectedShopId');
+      }
+    } catch {
+      setLocationError('Could not load locations. Check your connection and try again.');
+    }
+  }
+
+  useEffect(() => {
+    void loadLocations();
+  }, []);
   const [pin, setPin] = useState('');
   const [mode, setMode] = useState<Mode>('checkout');
   const [passId, setPassId] = useState('');
@@ -510,7 +535,7 @@ export default function App() {
       {locationError ? <><Text style={styles.note}>{locationError}</Text><SecondaryButton label="Try again" onPress={loadLocations}/></> : !locations ? <Text>Loading locations…</Text> : null}
       {screen==='resort' ? locations?.resorts.map(r=><PrimaryButton key={r.id} label={r.name} onPress={()=>{setResortId(r.id);setScreen('shop');}}/>) : <>
         <Text style={styles.subtitle}>{locations?.resorts.find(r=>r.id===resortId)?.name}</Text>
-        {locations?.shops.filter(s=>s.resortId===resortId).map(s=><PrimaryButton key={s.id} label={s.name} onPress={()=>{setShopId(s.id);setShopName(s.name);setScreen('login');}}/>)}
+        {locations?.shops.filter(s=>s.resortId===resortId).map(s=><PrimaryButton key={s.id} label={s.name} onPress={()=>{setShopId(s.id);setShopName(s.name);void AsyncStorage.setItem('selectedShopId',s.id);setScreen('login');}}/>)}
         <SecondaryButton label="Back to resorts" onPress={()=>setScreen('resort')}/>
       </>}
     </ScrollView></SafeAreaView>;
@@ -520,7 +545,7 @@ export default function App() {
       <SafeAreaView style={styles.safe}>
         <Pressable style={styles.flex} onPress={Keyboard.dismiss}>
           <View style={styles.page}>
-          <Text style={styles.logo}>Rental Inventory</Text><Text style={styles.subtitle}>{locations?.resorts.find(r=>r.id===resortId)?.name} · {shopName}</Text><SecondaryButton label="Change shop" onPress={()=>setScreen('resort')}/>
+          <Text style={styles.logo}>Rental Inventory</Text><Text style={styles.subtitle}>{locations?.resorts.find(r=>r.id===resortId)?.name} · {shopName}</Text><SecondaryButton label="Change shop" onPress={()=>{void AsyncStorage.removeItem('selectedShopId');setShopId('');setShopName('');setResortId('');setScreen('resort');}}/>
           <Text style={styles.subtitle}>Enter the shop PIN to connect this device to the rental system.</Text>
           <TextInput
             value={pin}
