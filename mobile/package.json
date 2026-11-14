@@ -13,7 +13,7 @@
   "dependencies": {
     "expo": "^57.0.17",
     "expo-camera": "~57.0.5",
-    "react": "19.2.0",
+    "react": "^19.2.3",
     "react-native": "0.86.3"
   },
   "devDependencies": {
