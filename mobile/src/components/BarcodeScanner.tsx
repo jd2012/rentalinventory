@@ -18,6 +18,7 @@ export function BarcodeScanner({
   const [permission, requestPermission] = useCameraPermissions();
   const [locked, setLocked] = useState(false);
   const [manualEntry, setManualEntry] = useState(false);
+  const [torchEnabled, setTorchEnabled] = useState(false);
   const [barcodeInput, setBarcodeInput] = useState('');
   const [lastScan, setLastScan] = useState<string | null>(null);
   const [localStatus, setLocalStatus] = useState<string | null>(null);
@@ -61,6 +62,7 @@ export function BarcodeScanner({
 
   function openManualEntry() {
     if (locked) return;
+    setTorchEnabled(false);
     setBarcodeInput('');
     setLocalStatus(null);
     setManualEntry(true);
@@ -115,6 +117,7 @@ export function BarcodeScanner({
       <CameraView
         style={StyleSheet.absoluteFill}
         facing="back"
+        enableTorch={torchEnabled}
         onBarcodeScanned={locked ? undefined : ({ data }) => {
           void handleScan(data);
         }}
@@ -130,6 +133,15 @@ export function BarcodeScanner({
               : 'Center the barcode inside the box.')}
         </Text>
         <View style={styles.actions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={torchEnabled ? 'Turn flashlight off' : 'Turn flashlight on'}
+            accessibilityState={{ selected: torchEnabled }}
+            style={[styles.cancel, torchEnabled && styles.torchActive]}
+            onPress={() => setTorchEnabled((enabled) => !enabled)}
+          >
+            <Text style={styles.cancelText}>{torchEnabled ? 'Flashlight: On' : 'Flashlight: Off'}</Text>
+          </Pressable>
         <Pressable accessibilityRole="button" disabled={locked} style={[styles.cancel, locked && styles.disabled]} onPress={openManualEntry}><Text style={styles.cancelText}>Type barcode</Text></Pressable>
         <Pressable style={styles.cancel} onPress={onCancel}><Text style={styles.cancelText}>Cancel</Text></Pressable>
         </View>
@@ -151,6 +163,7 @@ const styles = StyleSheet.create({
   target: { width: '88%', height: 180, borderWidth: 3, borderColor: '#fff', borderRadius: 18, backgroundColor: 'transparent' },
   help: { color: '#fff', fontSize: 16, textAlign: 'center' },
   cancel: { backgroundColor: 'rgba(0,0,0,0.65)', paddingHorizontal: 28, paddingVertical: 14, borderRadius: 12 },
+  torchActive: { backgroundColor: '#2563eb' },
   cancelText: { color: '#fff', fontSize: 17, fontWeight: '600' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 18 },
   message: { textAlign: 'center', fontSize: 17 },
