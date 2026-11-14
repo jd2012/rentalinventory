@@ -163,6 +163,27 @@ async function api(req,env,path,b) {
   }
   if(path==='/api/lookup/gear') { post(); const id=str(b.gearId,'gearId'); return {item:(await items(env,"i.gear_id=? AND i.status='OUT'",id))[0]||null,inventory:await inventory(env,id)}; }
   if(path==='/api/lookup/pass') { post(); return {items:await items(env,"i.pass_id=? AND i.status='OUT'",str(b.passId,'passId'))}; }
+  if(path==='/api/return/preview') {
+    post(); const code=str(b.code,'code');
+    await inventory(env,code);
+    const gear=(await items(env,'i.gear_id=?',code));
+    const assignment=gear.find(i=>i.status==='OUT') || gear[0];
+    if(assignment) return {kind:'rental',passId:assignment.passId,rental:await rental(env,assignment.rentalId),items:await items(env,'i.rental_id=?',assignment.rentalId)};
+    const found=await items(env,'i.pass_id=?',code);
+    if(found.length || await first(env,'SELECT 1 FROM rentals WHERE pass_id=? AND shop_id=?',code,env.SHOP_ID)) return {kind:'pass',passId:code,items:found};
+    return {kind:'none',message:'No rental found for that barcode.'};
+  }
+  if(path==='/api/return/selected') {
+    post(); const passId=str(b.passId,'passId');
+    if(!Array.isArray(b.itemIds) || !b.itemIds.length || b.itemIds.length>200) throw new ApiError('Select between 1 and 200 items to return.');
+    const ids=[...new Set(b.itemIds.map(id=>str(id,'itemId')))];
+    const placeholders=ids.map(()=>'?').join(',');
+    const selected=await items(env,`i.item_id IN (${placeholders}) AND i.pass_id=?`,...ids,passId);
+    if(selected.length!==ids.length) throw new ApiError('Selected items do not belong to this pass and shop.',409);
+    const now=new Date().toISOString();
+    const result=await env.DB.batch([statement(env,`UPDATE rental_items SET status='RETURNED',return_time=? WHERE item_id IN (${placeholders}) AND pass_id=? AND status='OUT' AND rental_id IN (SELECT rental_id FROM rentals WHERE shop_id=?) RETURNING item_id`,now,...ids,passId,env.SHOP_ID),action(env,'Returned selected items for pass '+passId)]);
+    return {ok:true,returned:result[0].results.length};
+  }
   if(path==='/api/return/scan') {
     post(); const code=str(b.code,'code'); await inventory(env,code); const i=(await items(env,"i.gear_id=? AND i.status='OUT'",code))[0];
     if(i) {
