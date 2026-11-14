@@ -15,9 +15,19 @@
     },
     "android": {
       "package": "work.jd2012.rentals",
-      "permissions": ["CAMERA"]
+      "permissions": [
+        "CAMERA"
+      ]
     },
     "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "enableSceneSupport": true
+          }
+        }
+      ],
       [
         "expo-camera",
         {
