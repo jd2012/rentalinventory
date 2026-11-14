@@ -107,7 +107,24 @@ export default function App() {
       await refreshStats();
       setScreen('home');
     } catch (error) {
-      Alert.alert('Could not sign in', error instanceof Error ? error.message : 'Unknown error');
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      if (message.includes('Select your resort and shop before continuing.')) {
+        setShopId('');
+        setAuthToken('');
+        setResortId('');
+        setShopName('');
+        setPin('');
+        setStats(null);
+        setScreen('resort');
+        try {
+          await AsyncStorage.removeItem('selectedShopId');
+        } catch {
+          // The current session can still recover if device storage is unavailable.
+        }
+        Alert.alert('Select your location', 'Please select your resort and shop again, then enter the shop PIN.');
+        return;
+      }
+      Alert.alert('Could not sign in', message);
     } finally {
       setBusy(false);
     }

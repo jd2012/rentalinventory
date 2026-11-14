@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 
 export function BarcodeScanner({
@@ -17,6 +17,8 @@ export function BarcodeScanner({
 }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [locked, setLocked] = useState(false);
+  const [manualEntry, setManualEntry] = useState(false);
+  const [barcodeInput, setBarcodeInput] = useState('');
   const [lastScan, setLastScan] = useState<string | null>(null);
   const [localStatus, setLocalStatus] = useState<string | null>(null);
 
@@ -24,20 +26,6 @@ export function BarcodeScanner({
     if (!permission) return;
     if (!permission.granted && permission.canAskAgain) requestPermission();
   }, [permission, requestPermission]);
-
-  if (!permission) {
-    return <View style={styles.center}><Text>Checking camera permission…</Text></View>;
-  }
-
-  if (!permission.granted) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.message}>Camera access is required to scan barcodes.</Text>
-        <Pressable style={styles.button} onPress={requestPermission}><Text style={styles.buttonText}>Allow camera</Text></Pressable>
-        <Pressable style={styles.link} onPress={onCancel}><Text>Cancel</Text></Pressable>
-      </View>
-    );
-  }
 
   async function handleScan(data: string) {
     const barcode = data.trim();
@@ -61,7 +49,7 @@ export function BarcodeScanner({
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown scan error';
-      setLocalStatus(null);
+      setLocalStatus(message);
       setLocked(false);
     } finally {
       if (!singleShot) {
@@ -69,6 +57,57 @@ export function BarcodeScanner({
         setTimeout(() => setLocked(false), 900);
       }
     }
+  }
+
+  function openManualEntry() {
+    if (locked) return;
+    setBarcodeInput('');
+    setLocalStatus(null);
+    setManualEntry(true);
+  }
+
+  if (manualEntry) {
+    return (
+      <SafeAreaView style={styles.manualRoot}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={styles.manualPage} keyboardShouldPersistTaps="handled">
+            <Text style={styles.manualTitle}>{title}</Text>
+            <Text style={styles.message}>Type the barcode exactly as printed on the pass or equipment.</Text>
+            <TextInput
+              accessibilityLabel="Barcode"
+              placeholder="Barcode"
+              value={barcodeInput}
+              onChangeText={setBarcodeInput}
+              autoFocus
+              autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+              editable={!locked}
+              returnKeyType="done"
+              onSubmitEditing={() => { void handleScan(barcodeInput); }}
+              style={styles.input}
+            />
+            {localStatus || statusMessage ? <Text style={styles.message}>{localStatus || statusMessage}</Text> : null}
+            <Pressable accessibilityRole="button" disabled={locked || !barcodeInput.trim()} style={[styles.button, (locked || !barcodeInput.trim()) && styles.disabled]} onPress={() => { void handleScan(barcodeInput); }}>
+              <Text style={styles.buttonText}>{locked ? 'Processing…' : 'Use barcode'}</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" disabled={locked} style={styles.link} onPress={() => setManualEntry(false)}><Text>Back to scanner</Text></Pressable>
+            <Pressable accessibilityRole="button" style={styles.link} onPress={onCancel}><Text>Cancel</Text></Pressable>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
+
+  if (!permission || !permission.granted) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.message}>{!permission ? 'Checking camera permission…' : 'Camera access is required to scan barcodes.'}</Text>
+        {permission && <Pressable style={styles.button} onPress={requestPermission}><Text style={styles.buttonText}>Allow camera</Text></Pressable>}
+        <Pressable accessibilityRole="button" style={styles.button} onPress={openManualEntry}><Text style={styles.buttonText}>Type barcode</Text></Pressable>
+        <Pressable style={styles.link} onPress={onCancel}><Text>Cancel</Text></Pressable>
+      </View>
+    );
   }
 
   return (
@@ -90,13 +129,22 @@ export function BarcodeScanner({
               ? `Read ${lastScan ?? 'barcode'} — processing…`
               : 'Center the barcode inside the box.')}
         </Text>
+        <View style={styles.actions}>
+        <Pressable accessibilityRole="button" disabled={locked} style={[styles.cancel, locked && styles.disabled]} onPress={openManualEntry}><Text style={styles.cancelText}>Type barcode</Text></Pressable>
         <Pressable style={styles.cancel} onPress={onCancel}><Text style={styles.cancelText}>Cancel</Text></Pressable>
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  manualRoot: { flex: 1, backgroundColor: '#f6f7f9' },
+  manualPage: { flexGrow: 1, padding: 24, gap: 18, justifyContent: 'center' },
+  manualTitle: { fontSize: 26, fontWeight: '700', textAlign: 'center' },
+  input: { backgroundColor: '#fff', color: '#111827', borderWidth: 1, borderColor: '#d1d5db', borderRadius: 12, padding: 16, fontSize: 22 },
+  actions: { gap: 12, alignItems: 'center' },
+  disabled: { opacity: 0.5 },
   root: { flex: 1, backgroundColor: '#000' },
   overlay: { flex: 1, alignItems: 'center', justifyContent: 'space-between', paddingVertical: 64, paddingHorizontal: 24 },
   title: { color: '#fff', fontSize: 24, fontWeight: '700', textAlign: 'center' },
