@@ -37,6 +37,25 @@ npx expo start
 
 Use a physical iPhone or Android phone to test camera scanning.
 
+## Local iOS build
+
+Install full Xcode, an iOS simulator runtime, and CocoaPods (`brew install cocoapods`).
+If `xcode-select -p` points to Command Line Tools, select full Xcode for the current terminal:
+
+```bash
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+cd mobile # from the repository root
+npm ci
+npx --yes expo-doctor
+npx expo prebuild --platform ios
+npm run ios
+```
+
+The native `ios/` and `android/` folders are generated locally and ignored by Git.
+Rerun Prebuild after changing native dependencies or app configuration. To build in
+Xcode, open `ios/RentalInventory.xcworkspace` and select the `RentalInventory` scheme.
+Physical-device builds require configuring your Apple signing team in Xcode.
+
 ## Environment
 
 The API URL normally does not need configuration because the app probes both production endpoints. To override it:

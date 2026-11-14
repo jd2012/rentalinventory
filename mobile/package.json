@@ -11,13 +11,13 @@
     "doctor": "expo-doctor"
   },
   "dependencies": {
-    "expo": "^57.0.17",
+    "@expo/ui": "~57.0.26",
+    "@react-native-async-storage/async-storage": "~2.2.0",
+    "expo": "~57.0.33",
     "expo-camera": "~57.0.5",
     "react": "19.2.3",
-    "react-native": "0.86.3",
-    "@expo/ui": "~57.0.21",
-    "@react-native-async-storage/async-storage": "~2.2.0",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3"
   },
   "devDependencies": {
     "@types/react": "~19.2.0",
