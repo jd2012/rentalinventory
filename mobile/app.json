@@ -15,7 +15,9 @@
     },
     "android": {
       "package": "work.jd2012.rentals",
-      "permissions": ["CAMERA"]
+      "permissions": [
+        "CAMERA"
+      ]
     },
     "plugins": [
       [
@@ -26,6 +28,10 @@
           "recordAudioAndroid": false
         }
       ]
-    ]
+    ],
+    "icon": "./assets/app-icon.png",
+    "web": {
+      "favicon": "./assets/app-icon.png"
+    }
   }
 }
