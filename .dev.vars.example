@@ -1,0 +1,4 @@
+# Copy to .dev.vars and choose local-only test credentials.
+MOUNTAIN_VILLAGE_PIN=choose-a-local-mountain-pin
+CANYONS_VILLAGE_PIN=choose-a-local-canyons-pin
+ADMIN_TOKEN=choose-a-different-local-administrator-key

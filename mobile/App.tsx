@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Alert,
+  Keyboard,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -9,22 +11,71 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import DateTimePicker from '@expo/ui/community/datetime-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BarcodeScanner } from './src/components/BarcodeScanner';
 import {
   addGear,
+  getRental,
+  finishRental,
   ensureRental,
   getStats,
   lookupGear,
   returnAllForPass,
   returnScan,
-  verifyPin,
+  setAuthToken,
+  verifyPin, getLocations, setShopId, type Locations,
 } from './src/lib/api';
 import type { GearItem, Mode, Rental, Stats } from './src/types';
 
-type Screen = 'login' | 'home' | 'scanPass' | 'scanGear' | 'inventoryResult' | 'returnPass';
+type Screen = 'resort' | 'shop' | 'login' | 'home' | 'scanPass' | 'confirmPass' | 'openingRental' | 'scanGear' | 'confirmGear' | 'gearAdded' | 'rentalReview' | 'inventoryResult' | 'returnPass' | 'returnResult';
+
+function tomorrow() {
+  const value = new Date();
+  value.setHours(12, 0, 0, 0);
+  value.setDate(value.getDate() + 1);
+  return value;
+}
+
+function formatDate(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>('login');
+  const [screen, setScreen] = useState<Screen>('resort');
+  const [locations, setLocations] = useState<Locations | null>(null);
+  const [locationError, setLocationError] = useState('');
+  const [resortId, setResortId] = useState('');
+  const [shopName, setShopName] = useState('');
+  async function loadLocations() {
+    try {
+      setLocationError('');
+      const loaded = await getLocations();
+      setLocations(loaded);
+
+      const savedShopId = await AsyncStorage.getItem('selectedShopId');
+      if (savedShopId) {
+        const savedShop = loaded.shops.find((shop) => shop.id === savedShopId);
+        if (savedShop) {
+          setResortId(savedShop.resortId);
+          setShopName(savedShop.name);
+          setShopId(savedShop.id);
+          setScreen('login');
+          return;
+        }
+        await AsyncStorage.removeItem('selectedShopId');
+      }
+    } catch {
+      setLocationError('Could not load locations. Check your connection and try again.');
+    }
+  }
+
+  useEffect(() => {
+    void loadLocations();
+  }, []);
   const [pin, setPin] = useState('');
   const [mode, setMode] = useState<Mode>('checkout');
   const [passId, setPassId] = useState('');
@@ -32,11 +83,20 @@ export default function App() {
   const [gear, setGear] = useState<GearItem[]>([]);
   const [inventoryItem, setInventoryItem] = useState<GearItem | null>(null);
   const [returnPassItems, setReturnPassItems] = useState<Array<Record<string, unknown>>>([]);
+  const [returnItem, setReturnItem] = useState<GearItem | null>(null);
+  const [returnError, setReturnError] = useState<string | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [busy, setBusy] = useState(false);
+  const [scanStatus, setScanStatus] = useState<string | null>(null);
+  const [pendingPass, setPendingPass] = useState<string | null>(null);
+  const [pendingGear, setPendingGear] = useState<string | null>(null);
+  const [dueDate, setDueDate] = useState<Date>(() => tomorrow());
 
   async function refreshStats() {
-    try { setStats(await getStats()); } catch { }
+    try {
+      if (pin.trim()) setAuthToken(pin.trim());
+      setStats(await getStats());
+    } catch { }
   }
 
   async function login() {
@@ -47,63 +107,129 @@ export default function App() {
       await refreshStats();
       setScreen('home');
     } catch (error) {
-      Alert.alert('Could not sign in', error instanceof Error ? error.message : 'Unknown error');
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      if (message.includes('Select your resort and shop before continuing.')) {
+        setShopId('');
+        setAuthToken('');
+        setResortId('');
+        setShopName('');
+        setPin('');
+        setStats(null);
+        setScreen('resort');
+        try {
+          await AsyncStorage.removeItem('selectedShopId');
+        } catch {
+          // The current session can still recover if device storage is unavailable.
+        }
+        Alert.alert('Select your location', 'Please select your resort and shop again, then enter the shop PIN.');
+        return;
+      }
+      Alert.alert('Could not sign in', message);
     } finally {
       setBusy(false);
     }
   }
 
   function start(newMode: Mode) {
+    setScanStatus(null);
     setMode(newMode);
     setPassId('');
     setRental(null);
     setGear([]);
     setInventoryItem(null);
     setReturnPassItems([]);
+    setReturnItem(null);
+    setReturnError(null);
+    setPendingPass(null);
+    setPendingGear(null);
+    setDueDate(tomorrow());
     setScreen(newMode === 'checkout' ? 'scanPass' : 'scanGear');
   }
 
   async function onPassScanned(code: string) {
+    const cleaned = code.trim();
+    setPendingPass(cleaned);
+    setScreen('confirmPass');
+  }
+
+  async function confirmPass() {
+    if (!pendingPass) return;
+    const cleaned = pendingPass;
+    setPassId(cleaned);
+    setPendingPass(null);
+    setScreen('openingRental');
+
     try {
-      const opened = await ensureRental(code);
-      setPassId(code);
+      if (pin.trim()) setAuthToken(pin.trim());
+      const opened = await ensureRental(cleaned);
+
+      if (!opened || !opened.id) {
+        throw new Error('Rental API responded without a rental ID.');
+      }
+
       setRental(opened);
+      const details = await getRental(opened.id);
+      setGear(details.items.filter(i => i.status === 'OUT').map(i => ({ barcode: i.gearId, type: i.gearType, size: i.size, status: i.status, dueDate: i.dueDate })));
+      if (details.rental.dueDate) setDueDate(new Date(details.rental.dueDate + 'T12:00:00'));
       setScreen('scanGear');
-      await refreshStats();
+      void refreshStats();
     } catch (error) {
-      Alert.alert('Could not open rental', error instanceof Error ? error.message : 'Unknown error');
-      setScreen('scanPass');
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      Alert.alert('Could not open rental', message, [
+        { text: 'Cancel', onPress: () => setScreen('home'), style: 'cancel' },
+        { text: 'Try again', onPress: () => setScreen('scanPass') },
+      ]);
     }
   }
 
   async function onGearScanned(code: string) {
+    if (pin.trim()) setAuthToken(pin.trim());
     try {
       if (mode === 'checkout') {
         if (!rental || !passId) throw new Error('Scan a guest pass first.');
-        await addGear(rental.id, passId, code);
-        const item = await lookupGear(code);
-        setGear((current) => current.some((g) => g.barcode === code) ? current : [...current, item]);
-        setScreen('scanGear');
-        await refreshStats();
+        setPendingGear(code.trim());
+        setScreen('confirmGear');
         return;
       }
 
       if (mode === 'return') {
+        setReturnError(null);
+        setReturnItem(null);
+
+        // Capture the checked-out item before /api/return/scan changes its status.
+        let scannedItem: GearItem | null = null;
+        try {
+          const lookup = await lookupGear(code);
+          if (lookup.status === 'OUT') scannedItem = lookup;
+        } catch {
+          // The code may be a guest pass rather than equipment, so continue.
+        }
+
         const result = await returnScan(code);
+
         if (result.kind === 'gear') {
-          setGear((current) => current.some((g) => g.barcode === code) ? current : [...current, { barcode: code, status: 'RETURNED' }]);
-          setScreen('scanGear');
-          await refreshStats();
+          const returnedItem: GearItem = scannedItem
+            ? { ...scannedItem, status: 'RETURNED' }
+            : { barcode: code, status: 'RETURNED' };
+
+          setReturnItem(returnedItem);
+          setGear((current) =>
+            current.some((g) => g.barcode === code) ? current : [...current, returnedItem]
+          );
+          setScreen('returnResult');
+          void refreshStats();
           return;
         }
+
         if (result.kind === 'pass') {
           setPassId(result.passId);
           setReturnPassItems(result.items);
           setScreen('returnPass');
           return;
         }
-        Alert.alert('Not found', 'That barcode is not currently checked out.');
-        setScreen('scanGear');
+
+        setReturnError('That barcode is not currently checked out.');
+        setScreen('returnResult');
         return;
       }
 
@@ -111,9 +237,53 @@ export default function App() {
       setInventoryItem(item);
       setScreen('inventoryResult');
     } catch (error) {
-      Alert.alert('Scan failed', error instanceof Error ? error.message : 'Unknown error');
+      const message = error instanceof Error ? error.message : 'Unknown error';
+
+      if (mode === 'return') {
+        setReturnError(message);
+        setReturnItem(null);
+        setScreen('returnResult');
+        return;
+      }
+
+      Alert.alert('Scan failed', message);
       setScreen(mode === 'checkout' ? 'scanGear' : 'home');
     }
+  }
+
+  async function confirmGear() {
+    if (!pendingGear || !rental || !passId || busy) return;
+    setBusy(true);
+    const code = pendingGear;
+
+    try {
+      if (pin.trim()) setAuthToken(pin.trim());
+      await addGear(rental.id, passId, code);
+      const item = await lookupGear(code);
+      setGear((current) => current.some((g) => g.barcode === code) ? current : [...current, item]);
+      setPendingGear(null);
+      setScreen('gearAdded');
+      await refreshStats();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      Alert.alert('Could not add equipment', message);
+      setPendingGear(null);
+      setScreen('scanGear');
+    } finally { setBusy(false); }
+  }
+
+  async function finishOrder() {
+    if (!rental || busy) return;
+    setBusy(true);
+    try {
+      await finishRental(rental.id, formatDate(dueDate));
+      setPendingGear(null);
+      setPendingPass(null);
+      await refreshStats();
+      setScreen('home');
+    } catch (error) {
+      Alert.alert('Could not finish rental', error instanceof Error ? error.message : 'Unknown error');
+    } finally { setBusy(false); }
   }
 
   async function returnWholePass() {
@@ -132,7 +302,44 @@ export default function App() {
   }
 
   if (screen === 'scanPass') {
-    return <BarcodeScanner title="Scan guest pass" onCancel={() => setScreen('home')} onScan={onPassScanned} />;
+    return (
+      <BarcodeScanner
+        title="Scan guest pass"
+        onCancel={() => setScreen('home')}
+        onScan={onPassScanned}
+        singleShot
+      />
+    );
+  }
+
+  if (screen === 'confirmPass' && pendingPass) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={[styles.page, styles.centerPage]}>
+          <Text style={styles.eyebrow}>CONFIRM GUEST PASS</Text>
+          <Text style={styles.heading}>{pendingPass}</Text>
+          <Text style={styles.subtitle}>Use this guest pass for the rental?</Text>
+
+          <PrimaryButton label="Confirm pass" onPress={confirmPass} />
+          <SecondaryButton label="Scan again" onPress={() => { setPendingPass(null); setScreen('scanPass'); }} />
+          <SecondaryButton label="Cancel" onPress={() => { setPendingPass(null); setScreen('home'); }} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (screen === 'openingRental') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={[styles.page, styles.centerPage]}>
+          <Text style={styles.eyebrow}>GUEST PASS</Text>
+          <Text style={styles.heading}>{passId}</Text>
+          <Text style={styles.subtitle}>Opening rental…</Text>
+          <Text style={styles.note}>Connecting to the rental system. If this fails, you’ll get an error instead of being left on the camera screen.</Text>
+          <SecondaryButton label="Cancel" onPress={() => setScreen('home')} />
+        </View>
+      </SafeAreaView>
+    );
   }
 
   if (screen === 'scanGear') {
@@ -142,6 +349,159 @@ export default function App() {
         onCancel={() => setScreen('home')}
         onScan={onGearScanned}
       />
+    );
+  }
+
+  if (screen === 'confirmGear' && pendingGear) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={[styles.page, styles.centerPage]}>
+          <Text style={styles.eyebrow}>CONFIRM EQUIPMENT</Text>
+          <Text style={styles.heading}>{pendingGear}</Text>
+          <Text style={styles.subtitle}>Add this piece of equipment to pass {passId}?</Text>
+          <PrimaryButton label={busy ? "Adding…" : "Add equipment"} disabled={busy} onPress={confirmGear} />
+          <SecondaryButton label="Scan again" onPress={() => { setPendingGear(null); setScreen('scanGear'); }} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (screen === 'gearAdded') {
+    const lastItem = gear[gear.length - 1];
+
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={[styles.page, styles.centerPage]}>
+          <Text style={styles.eyebrow}>EQUIPMENT ADDED</Text>
+          <Text style={styles.heading}>Item confirmed</Text>
+
+          {lastItem ? (
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>Equipment</Text>
+              <Text style={styles.cardValue}>{lastItem.barcode}</Text>
+              <Text style={styles.muted}>
+                {[lastItem.type, lastItem.size].filter(Boolean).join(' • ') || 'Added to rental'}
+              </Text>
+            </View>
+          ) : null}
+
+          <PrimaryButton label="Scan another piece" onPress={() => setScreen('scanGear')} />
+          <SecondaryButton label="Done" onPress={() => setScreen('rentalReview')} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (screen === 'rentalReview') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <ScrollView contentContainerStyle={styles.page}>
+          <Text style={styles.eyebrow}>RENTAL REVIEW</Text>
+          <Text style={styles.heading}>Review order</Text>
+
+          <Card label="Guest pass" value={passId || '—'} />
+          <Card label="Rental ID" value={rental?.id || '—'} />
+          <View style={styles.dueDateSection}>
+            <Text style={styles.cardLabel}>Due date</Text>
+            <Text style={styles.dateButtonText}>{formatDate(dueDate)}</Text>
+            <Text style={styles.note}>Defaults to tomorrow. Choose a different return date if needed.</Text>
+
+            <View style={styles.pickerCard}>
+              <DateTimePicker
+                value={dueDate}
+                mode="date"
+                minimumDate={new Date()}
+                display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                presentation={Platform.OS === 'android' ? 'dialog' : 'inline'}
+                themeVariant="light"
+                accentColor="#2563eb"
+                onValueChange={(_, selectedDate) => {
+                  selectedDate.setHours(12, 0, 0, 0);
+                  setDueDate(selectedDate);
+                }}
+              />
+            </View>
+          </View>
+
+          <Card label="Items scanned" value={String(gear.length)} />
+
+          <Text style={styles.section}>Equipment</Text>
+
+          {gear.length === 0 ? (
+            <View style={styles.itemRow}>
+              <Text style={styles.itemBarcode}>No equipment scanned</Text>
+            </View>
+          ) : (
+            gear.map((item, index) => (
+              <View key={`${item.barcode}-${index}`} style={styles.itemRow}>
+                <Text style={styles.itemBarcode}>{item.barcode}</Text>
+                <Text style={styles.muted}>
+                  {[item.type, item.size, item.status].filter(Boolean).join(' • ') || 'Equipment'}
+                </Text>
+              </View>
+            ))
+          )}
+
+          <PrimaryButton
+            label={busy ? 'Saving…' : 'Finish rental'}
+            disabled={busy || gear.length === 0}
+            onPress={finishOrder}
+          />
+          <SecondaryButton label="Add more equipment" onPress={() => setScreen('scanGear')} />
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  if (screen === 'returnResult') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <ScrollView contentContainerStyle={styles.page}>
+          {returnError ? (
+            <>
+              <Text style={styles.eyebrow}>RETURN EQUIPMENT</Text>
+              <Text style={styles.heading}>Could not return item</Text>
+              <View style={styles.errorCard}>
+                <Text style={styles.errorText}>{returnError}</Text>
+              </View>
+              <PrimaryButton
+                label="Scan again"
+                onPress={() => {
+                  setReturnError(null);
+                  setReturnItem(null);
+                  setScreen('scanGear');
+                }}
+              />
+              <SecondaryButton label="Home" onPress={() => setScreen('home')} />
+            </>
+          ) : (
+            <>
+              <Text style={styles.eyebrow}>RETURN COMPLETE</Text>
+              <Text style={styles.heading}>Equipment returned</Text>
+
+              {returnItem ? (
+                <>
+                  <Card label="Equipment" value={returnItem.barcode} />
+                  {returnItem.type ? <Card label="Type" value={returnItem.type} /> : null}
+                  {returnItem.size ? <Card label="Size" value={returnItem.size} /> : null}
+                  {returnItem.passId ? <Card label="Guest pass" value={returnItem.passId} /> : null}
+                  <Card label="Status" value="RETURNED" />
+                </>
+              ) : null}
+
+              <PrimaryButton
+                label="Scan another return"
+                onPress={() => {
+                  setReturnItem(null);
+                  setReturnError(null);
+                  setScreen('scanGear');
+                }}
+              />
+              <SecondaryButton label="Done" onPress={() => setScreen('home')} />
+            </>
+          )}
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 
@@ -155,6 +515,9 @@ export default function App() {
           {returnPassItems.map((item, i) => (
             <View key={`${String(item.gearId ?? i)}-${i}`} style={styles.itemRow}>
               <Text style={styles.itemBarcode}>{String(item.gearId ?? 'Equipment')}</Text>
+              <Text style={styles.muted}>
+                {[item.gearType, item.size].filter(Boolean).map(String).join(' • ') || 'Checked out'}
+              </Text>
             </View>
           ))}
           <PrimaryButton label={busy ? 'Returning…' : 'Return all items'} onPress={returnWholePass} disabled={busy} />
@@ -174,6 +537,7 @@ export default function App() {
           <Card label="Size" value={inventoryItem.size ?? '—'} />
           <Card label="Status" value={inventoryItem.status ?? '—'} />
           {inventoryItem.passId && <Card label="Checked out to pass" value={inventoryItem.passId} />}
+          {inventoryItem.dueDate && <Card label={inventoryItem.overdue ? 'Overdue since' : 'Due date'} value={inventoryItem.dueDate} />}
           {inventoryItem.endOfLifeDate && <Card label="End of life" value={inventoryItem.endOfLifeDate} />}
           <PrimaryButton label="Scan another" onPress={() => { setInventoryItem(null); setScreen('scanGear'); }} />
           <SecondaryButton label="Home" onPress={() => setScreen('home')} />
@@ -182,11 +546,23 @@ export default function App() {
     );
   }
 
+  if (screen === 'resort' || screen === 'shop') {
+    return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}>
+      <Text style={styles.heading}>{screen==='resort'?'Select a resort':'Select a shop'}</Text>
+      {locationError ? <><Text style={styles.note}>{locationError}</Text><SecondaryButton label="Try again" onPress={loadLocations}/></> : !locations ? <Text>Loading locations…</Text> : null}
+      {screen==='resort' ? locations?.resorts.map(r=><PrimaryButton key={r.id} label={r.name} onPress={()=>{setResortId(r.id);setScreen('shop');}}/>) : <>
+        <Text style={styles.subtitle}>{locations?.resorts.find(r=>r.id===resortId)?.name}</Text>
+        {locations?.shops.filter(s=>s.resortId===resortId).map(s=><PrimaryButton key={s.id} label={s.name} onPress={()=>{setShopId(s.id);setShopName(s.name);void AsyncStorage.setItem('selectedShopId',s.id);setScreen('login');}}/>)}
+        <SecondaryButton label="Back to resorts" onPress={()=>setScreen('resort')}/>
+      </>}
+    </ScrollView></SafeAreaView>;
+  }
   if (screen === 'login') {
     return (
       <SafeAreaView style={styles.safe}>
-        <View style={styles.page}>
-          <Text style={styles.logo}>Rental Inventory</Text>
+        <Pressable style={styles.flex} onPress={Keyboard.dismiss}>
+          <View style={styles.page}>
+          <Text style={styles.logo}>Rental Inventory</Text><Text style={styles.subtitle}>{locations?.resorts.find(r=>r.id===resortId)?.name} · {shopName}</Text><SecondaryButton label="Change shop" onPress={()=>{void AsyncStorage.removeItem('selectedShopId');setShopId('');setShopName('');setResortId('');setScreen('resort');}}/>
           <Text style={styles.subtitle}>Enter the shop PIN to connect this device to the rental system.</Text>
           <TextInput
             value={pin}
@@ -199,7 +575,8 @@ export default function App() {
             onSubmitEditing={login}
           />
           <PrimaryButton label={busy ? 'Connecting…' : 'Connect'} onPress={login} disabled={busy || !pin.trim()} />
-        </View>
+          </View>
+        </Pressable>
       </SafeAreaView>
     );
   }
@@ -208,7 +585,7 @@ export default function App() {
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.page}>
         <Text style={styles.eyebrow}>RENTAL INVENTORY</Text>
-        <Text style={styles.heading}>Shop dashboard</Text>
+        <Text style={styles.heading}>{shopName}</Text><Text style={styles.subtitle}>{locations?.resorts.find(r=>r.id===resortId)?.name}</Text><SecondaryButton label="Change shop" onPress={()=>{setShopId('');setAuthToken('');setPin('');setStats(null);setRental(null);setGear([]);setPassId('');setScreen('resort');}}/>
         {stats && (
           <View style={styles.statsRow}>
             <MiniStat label="Items out" value={String(stats.totalOut)} />
@@ -245,7 +622,9 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f6f7f9' },
+  flex: { flex: 1 },
   page: { flexGrow: 1, padding: 22, gap: 14 },
+  centerPage: { justifyContent: 'center' },
   logo: { fontSize: 34, fontWeight: '800', marginTop: 48 },
   heading: { fontSize: 30, fontWeight: '800', marginBottom: 8 },
   subtitle: { fontSize: 17, lineHeight: 24, color: '#4b5563' },
@@ -265,6 +644,13 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#fff', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#e5e7eb' },
   cardLabel: { color: '#6b7280', fontSize: 12, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' },
   cardValue: { color: '#111827', fontSize: 20, fontWeight: '700', marginTop: 5 },
+  dueDateSection: { backgroundColor: '#fff', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#e5e7eb', gap: 10 },
+  dateButton: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 12, padding: 14, backgroundColor: '#f9fafb' },
+  dateButtonText: { fontSize: 22, fontWeight: '800', color: '#111827' },
+  dateButtonHint: { marginTop: 3, color: '#6b7280', fontSize: 12 },
+  pickerCard: { backgroundColor: '#fff', borderRadius: 16, padding: 12, borderWidth: 1, borderColor: '#e5e7eb' },
+  errorCard: { backgroundColor: '#fff', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#fecaca' },
+  errorText: { color: '#991b1b', fontSize: 16, lineHeight: 22, fontWeight: '600' },
   statsRow: { flexDirection: 'row', gap: 12 },
   miniStat: { flex: 1, backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e7eb' },
   miniValue: { fontSize: 28, fontWeight: '800' },

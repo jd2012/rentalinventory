@@ -1,4 +1,4 @@
-# Rental Inventory Mobile
+# Rental Inventory Companion Apps
 
 Cross-platform iPhone + Android client for the existing Kids Rental Tracker backend.
 
@@ -17,7 +17,7 @@ No Django migration is required for the mobile client.
 
 - Authenticate using the existing shop PIN (`Authorization: Bearer <PIN>`)
 - Dashboard stats
-- Checkout: scan guest pass, then scan gear
+- Checkout: scan and confirm guest pass, then scan and confirm gear
 - Each checkout scan is saved immediately through `/api/items/add`
 - Return a single item by scanning gear
 - Scan a guest pass to view all outstanding gear and return everything
@@ -36,6 +36,25 @@ npx expo start
 ```
 
 Use a physical iPhone or Android phone to test camera scanning.
+
+## Local iOS build
+
+Install full Xcode, an iOS simulator runtime, and CocoaPods (`brew install cocoapods`).
+If `xcode-select -p` points to Command Line Tools, select full Xcode for the current terminal:
+
+```bash
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+cd mobile # from the repository root
+npm ci
+npx --yes expo-doctor
+npx expo prebuild --platform ios
+npm run ios
+```
+
+The native `ios/` and `android/` folders are generated locally and ignored by Git.
+Rerun Prebuild after changing native dependencies or app configuration. To build in
+Xcode, open `ios/RentalInventory.xcworkspace` and select the `RentalInventory` scheme.
+Physical-device builds require configuring your Apple signing team in Xcode.
 
 ## Environment
 
@@ -62,3 +81,7 @@ eas build --platform ios
 ```
 
 Google Play distribution requires a Play Console developer account. TestFlight/App Store distribution requires an Apple Developer account.
+
+## Product boundary
+
+These apps are companions to the website, maintained independently in this repository. Keep mobile scanning confirmations. Database administration, inventory management and label printing live in `../site/`. Both clients share the API in `../worker/`; status and due-date rules remain server-owned.

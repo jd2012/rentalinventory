@@ -2,7 +2,7 @@
   "expo": {
     "name": "Rental Inventory",
     "slug": "rental-inventory",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "scheme": "rentalinventory",
@@ -17,11 +17,18 @@
     "android": {
       "package": "work.jd2012.rentals",
       "permissions": [
-        "CAMERA",
-        "android.permission.CAMERA"
+        "CAMERA"
       ]
     },
     "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "enableSceneSupport": true
+          }
+        }
+      ],
       [
         "expo-camera",
         {

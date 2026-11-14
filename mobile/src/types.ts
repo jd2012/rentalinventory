@@ -4,6 +4,7 @@ export type Rental = {
   id: string;
   passId: string;
   outTime: string;
+  dueDate?: string;
   status: string;
 };
 
@@ -15,6 +16,8 @@ export type GearItem = {
   passId?: string;
   rentalId?: string;
   outTime?: string;
+  dueDate?: string;
+  overdue?: boolean;
   endOfLifeDate?: string;
 };
 
