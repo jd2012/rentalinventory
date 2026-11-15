@@ -1,0 +1,31 @@
+{
+  "configVersion": 0,
+  "apple": {
+    "version": "0.1.1",
+    "release": {
+      "automaticRelease": true
+    },
+    "info": {
+      "en-US": {
+        "title": "Rental Inventory",
+        "subtitle": "Rental equipment tracker",
+        "description": "Rental Inventory helps rental-shop staff manage equipment checkouts and returns.\n\nChoose your resort and shop, then connect with your shop PIN. Scan guest passes and equipment barcodes, confirm checkout details, and set return dates.\n\nScan equipment or a guest pass to view rental history and select the items being returned. Look up equipment status and due dates, enter barcodes manually when needed, and use the scanner flashlight in low light.\n\nAn existing participating rental shop and valid shop PIN are required.",
+        "keywords": [
+          "rental",
+          "inventory",
+          "equipment",
+          "barcode",
+          "checkout",
+          "returns"
+        ],
+        "supportUrl": "https://rentals.jd2012.work/support.html",
+        "privacyPolicyUrl": "https://rentals.jd2012.work/privacy.html"
+      }
+    },
+    "copyright": "2026 Joseph Kirven",
+    "categories": [
+      "BUSINESS",
+      "PRODUCTIVITY"
+    ]
+  }
+}
