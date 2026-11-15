@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   Alert,
   Keyboard,
+  Linking,
   Platform,
   Pressable,
   SafeAreaView,
@@ -541,6 +542,7 @@ export default function App() {
         {locations?.shops.filter(s=>s.resortId===resortId).map(s=><PrimaryButton key={s.id} label={s.name} onPress={()=>{setShopId(s.id);setShopName(s.name);void AsyncStorage.setItem('selectedShopId',s.id);setScreen('login');}}/>)}
         <SecondaryButton label="Back to resorts" onPress={()=>setScreen('resort')}/>
       </>}
+      <AppLinks />
     </ScrollView></SafeAreaView>;
   }
   if (screen === 'login') {
@@ -561,6 +563,7 @@ export default function App() {
             onSubmitEditing={login}
           />
           <PrimaryButton label={busy ? 'Connecting…' : 'Connect'} onPress={login} disabled={busy || !pin.trim()} />
+          <AppLinks />
           </View>
         </Pressable>
       </SafeAreaView>
@@ -585,9 +588,22 @@ export default function App() {
         {gear.length > 0 && <Text style={styles.note}>Last session processed {gear.length} item{gear.length === 1 ? '' : 's'}.</Text>}
         <SecondaryButton label="Refresh dashboard" onPress={refreshStats} />
         <SecondaryButton label="Disconnect device" onPress={() => { setPin(''); setStats(null); setScreen('login'); }} />
+        <AppLinks />
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function AppLinks() {
+  function openPage(page: 'privacy' | 'support') {
+    void Linking.openURL(`https://rentals.jd2012.work/${page}.html`).catch(() => {
+      Alert.alert('Could not open page', 'Please try again when your connection is available.');
+    });
+  }
+  return <View style={styles.appLinks}>
+    <Pressable accessibilityRole="link" onPress={() => openPage('privacy')} style={styles.appLink}><Text style={styles.appLinkText}>Privacy policy</Text></Pressable>
+    <Pressable accessibilityRole="link" onPress={() => openPage('support')} style={styles.appLink}><Text style={styles.appLinkText}>Support</Text></Pressable>
+  </View>;
 }
 
 function PrimaryButton({ label, onPress, disabled = false }: { label: string; onPress: () => void; disabled?: boolean }) {
@@ -609,6 +625,9 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f6f7f9' },
   flex: { flex: 1 },
+  appLinks: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 20 },
+  appLink: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
+  appLinkText: { color: '#2563eb', fontSize: 15, textDecorationLine: 'underline' },
   page: { flexGrow: 1, padding: 22, gap: 14 },
   centerPage: { justifyContent: 'center' },
   logo: { fontSize: 34, fontWeight: '800', marginTop: 48 },
