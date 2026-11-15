@@ -26,3 +26,5 @@ export type Stats = {
   openRentals: number;
   lastAction: string;
 };
+
+export type RentalItem = { id: string; rentalId: string; passId: string; gearId: string; gearType?: string; size?: string; status: string; returnTime?: string };

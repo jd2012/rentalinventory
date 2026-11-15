@@ -150,3 +150,39 @@ test('administrator deletion blocks outstanding equipment and preserves inventor
  await ok('/api/admin/delete',{table:'rentals',id:second.id},admin);
  assert.equal((await db.prepare('SELECT count(*) AS n FROM rental_items WHERE rental_id=?').bind(second.id).first()).n,0);
 });
+
+test('return preview opens full rental without mutation; selected returns preserve history',async()=>{
+ await create('SELECT-A');await create('SELECT-B');const r=await open('PASS-SELECT');
+ await add(r,'SELECT-A');await add(r,'SELECT-B');
+ const preview=await ok('/api/return/preview',{code:'SELECT-A'});
+ assert.equal(preview.kind,'rental');assert.equal(preview.rental.id,r.id);
+ assert.equal(preview.items.length,2);assert(preview.items.every(i=>i.status==='OUT'));
+ const a=preview.items.find(i=>i.gearId==='SELECT-A');
+ assert.equal((await ok('/api/return/selected',{passId:r.passId,itemIds:[a.id]})).returned,1);
+ let detail=await ok('/api/rentals/detail',{rentalId:r.id});
+ assert.equal(detail.rental.status,'OUT');assert.equal(detail.items.length,2);
+ assert.equal(detail.items.find(i=>i.id===a.id).status,'RETURNED');
+ assert.ok(detail.items.find(i=>i.id===a.id).returnTime);
+ assert.equal((await ok('/api/return/selected',{passId:r.passId,itemIds:[a.id]})).returned,0);
+ const pass=await ok('/api/return/preview',{code:r.passId});assert.equal(pass.items.length,2);
+ const returnedGear=await ok('/api/return/preview',{code:'SELECT-A'});assert.equal(returnedGear.items.length,2);
+ assert.equal((await call('/api/return/selected',{passId:'OTHER',itemIds:[a.id]})).status,409);
+ const otherShop={authorization:'Bearer test-canyon','x-shop-id':'canyons-village'};
+ assert.equal((await call('/api/return/selected',{passId:r.passId,itemIds:[a.id]},otherShop)).status,409);
+ assert.equal((await call('/api/return/selected',{passId:r.passId,itemIds:[]})).status,400);
+ const b=detail.items.find(i=>i.gearId==='SELECT-B');
+ assert.equal((await call('/api/return/selected',{passId:r.passId,itemIds:[b.id,'invalid']})).status,409);
+ detail=await ok('/api/rentals/detail',{rentalId:r.id});assert.equal(detail.items.find(i=>i.id===b.id).status,'OUT');
+ assert.equal((await ok('/api/return/selected',{passId:r.passId,itemIds:[b.id]})).returned,1);
+ detail=await ok('/api/rentals/detail',{rentalId:r.id});assert.equal(detail.rental.status,'CLOSED');
+ assert.equal((await ok('/api/return/preview',{code:r.passId})).items.filter(i=>i.status==='RETURNED').length,2);
+});
+test('returning a historical assignment cannot return the same gear on a newer rental',async()=>{
+ await create('HISTORY-GEAR');const old=await open('HISTORY-OLD');await add(old,'HISTORY-GEAR');
+ const original=(await ok('/api/return/preview',{code:'HISTORY-GEAR'})).items[0];
+ await ok('/api/return/selected',{passId:old.passId,itemIds:[original.id]});
+ const current=await open('HISTORY-NEW');await add(current,'HISTORY-GEAR');
+ assert.equal((await ok('/api/return/preview',{code:'HISTORY-GEAR'})).rental.id,current.id);
+ assert.equal((await ok('/api/return/selected',{passId:old.passId,itemIds:[original.id]})).returned,0);
+ assert.equal((await ok('/api/rentals/detail',{rentalId:current.id})).items[0].status,'OUT');
+});

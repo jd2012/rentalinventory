@@ -1,4 +1,4 @@
-import type { GearItem, Rental, Stats } from '../types';
+import type { GearItem, Rental, Stats, RentalItem } from '../types';
 
 const API_CANDIDATES = [
   process.env.EXPO_PUBLIC_API_BASE_URL,
@@ -144,4 +144,15 @@ export async function getRental(rentalId: string) {
 }
 export async function finishRental(rentalId: string, dueDate: string) {
   return request<{ rental: Rental }>('/api/rentals/finish', { rentalId, dueDate });
+}
+
+export async function previewReturn(code: string) {
+  return request<
+    | { kind: 'rental'; passId: string; rental: Rental; items: RentalItem[] }
+    | { kind: 'pass'; passId: string; items: RentalItem[] }
+    | { kind: 'none'; message: string }
+  >('/api/return/preview', { code });
+}
+export async function returnSelectedItems(passId: string, itemIds: string[]) {
+  return request<{ ok: true; returned: number }>('/api/return/selected', { passId, itemIds });
 }

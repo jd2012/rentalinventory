@@ -21,12 +21,12 @@ import {
   ensureRental,
   getStats,
   lookupGear,
-  returnAllForPass,
-  returnScan,
+  previewReturn,
+  returnSelectedItems,
   setAuthToken,
   verifyPin, getLocations, setShopId, type Locations,
 } from './src/lib/api';
-import type { GearItem, Mode, Rental, Stats } from './src/types';
+import type { GearItem, Mode, Rental, Stats, RentalItem } from './src/types';
 
 type Screen = 'resort' | 'shop' | 'login' | 'home' | 'scanPass' | 'confirmPass' | 'openingRental' | 'scanGear' | 'confirmGear' | 'gearAdded' | 'rentalReview' | 'inventoryResult' | 'returnPass' | 'returnResult';
 
@@ -82,7 +82,8 @@ export default function App() {
   const [rental, setRental] = useState<Rental | null>(null);
   const [gear, setGear] = useState<GearItem[]>([]);
   const [inventoryItem, setInventoryItem] = useState<GearItem | null>(null);
-  const [returnPassItems, setReturnPassItems] = useState<Array<Record<string, unknown>>>([]);
+  const [returnPassItems, setReturnPassItems] = useState<RentalItem[]>([]);
+  const [selectedReturnIds, setSelectedReturnIds] = useState<string[]>([]);
   const [returnItem, setReturnItem] = useState<GearItem | null>(null);
   const [returnError, setReturnError] = useState<string | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -194,42 +195,16 @@ export default function App() {
 
       if (mode === 'return') {
         setReturnError(null);
-        setReturnItem(null);
-
-        // Capture the checked-out item before /api/return/scan changes its status.
-        let scannedItem: GearItem | null = null;
-        try {
-          const lookup = await lookupGear(code);
-          if (lookup.status === 'OUT') scannedItem = lookup;
-        } catch {
-          // The code may be a guest pass rather than equipment, so continue.
-        }
-
-        const result = await returnScan(code);
-
-        if (result.kind === 'gear') {
-          const returnedItem: GearItem = scannedItem
-            ? { ...scannedItem, status: 'RETURNED' }
-            : { barcode: code, status: 'RETURNED' };
-
-          setReturnItem(returnedItem);
-          setGear((current) =>
-            current.some((g) => g.barcode === code) ? current : [...current, returnedItem]
-          );
+        const result = await previewReturn(code);
+        if (result.kind === 'none') {
+          setReturnError(result.message);
           setScreen('returnResult');
-          void refreshStats();
           return;
         }
-
-        if (result.kind === 'pass') {
-          setPassId(result.passId);
-          setReturnPassItems(result.items);
-          setScreen('returnPass');
-          return;
-        }
-
-        setReturnError('That barcode is not currently checked out.');
-        setScreen('returnResult');
+        setPassId(result.passId);
+        setReturnPassItems(result.items);
+        setSelectedReturnIds([]);
+        setScreen('returnPass');
         return;
       }
 
@@ -286,19 +261,22 @@ export default function App() {
     } finally { setBusy(false); }
   }
 
-  async function returnWholePass() {
-    if (!passId) return;
+  async function returnSelected() {
+    if (busy || !passId || !selectedReturnIds.length) return;
     try {
       setBusy(true);
-      const result = await returnAllForPass(passId);
-      Alert.alert('Return complete', `${result.returned} item${result.returned === 1 ? '' : 's'} returned.`);
+      const result = await returnSelectedItems(passId, selectedReturnIds);
+      // Keep the same reservation visible, including returned assignments.
+      const detail = await previewReturn(passId);
+      if (detail.kind !== 'none') {
+        setReturnPassItems((current) => detail.items.filter(item => current.some(old => old.id === item.id)));
+      }
+      setSelectedReturnIds([]);
       await refreshStats();
-      setScreen('home');
+      Alert.alert('Return complete', `${result.returned} item${result.returned === 1 ? '' : 's'} returned.`);
     } catch (error) {
       Alert.alert('Could not return items', error instanceof Error ? error.message : 'Unknown error');
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   }
 
   if (screen === 'scanPass') {
@@ -460,7 +438,7 @@ export default function App() {
           {returnError ? (
             <>
               <Text style={styles.eyebrow}>RETURN EQUIPMENT</Text>
-              <Text style={styles.heading}>Could not return item</Text>
+              <Text style={styles.heading}>Could not find rental</Text>
               <View style={styles.errorCard}>
                 <Text style={styles.errorText}>{returnError}</Text>
               </View>
@@ -511,16 +489,24 @@ export default function App() {
         <ScrollView contentContainerStyle={styles.page}>
           <Text style={styles.heading}>Return guest rental</Text>
           <Card label="Guest pass" value={passId} />
-          <Text style={styles.section}>{returnPassItems.length} item{returnPassItems.length === 1 ? '' : 's'} currently out</Text>
-          {returnPassItems.map((item, i) => (
-            <View key={`${String(item.gearId ?? i)}-${i}`} style={styles.itemRow}>
-              <Text style={styles.itemBarcode}>{String(item.gearId ?? 'Equipment')}</Text>
-              <Text style={styles.muted}>
-                {[item.gearType, item.size].filter(Boolean).map(String).join(' • ') || 'Checked out'}
-              </Text>
-            </View>
-          ))}
-          <PrimaryButton label={busy ? 'Returning…' : 'Return all items'} onPress={returnWholePass} disabled={busy} />
+          <Text style={styles.section}>{returnPassItems.filter(item => item.status === 'OUT').length} items currently out</Text>
+          <Text style={styles.note}>Select the equipment being returned.</Text>
+          {returnPassItems.map((item) => {
+            const returned = item.status === 'RETURNED';
+            const selected = selectedReturnIds.includes(item.id);
+            return (
+              <Pressable key={item.id} accessibilityRole="checkbox" accessibilityState={{ checked: selected, disabled: returned || busy }} disabled={returned || busy}
+                onPress={() => setSelectedReturnIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])}
+                style={[styles.itemRow, selected && { borderColor: '#2563eb', borderWidth: 2 }, returned && { backgroundColor: '#e5e7eb', opacity: 0.6 }]}>
+                <Text style={styles.itemBarcode}>{returned ? 'Returned · ' : selected ? '☑ ' : '☐ '}{item.gearId}</Text>
+                <Text style={styles.muted}>{[item.gearType, item.size].filter(Boolean).join(' • ')}</Text>
+                {returned && <Text style={styles.note}>Returned{item.returnTime ? ` · ${new Date(item.returnTime).toLocaleString()}` : ''}</Text>}
+              </Pressable>
+            );
+          })}
+          {!busy && <SecondaryButton label="Select all outstanding" onPress={() => setSelectedReturnIds(returnPassItems.filter(item => item.status === 'OUT').map(item => item.id))} />}
+          {!busy && selectedReturnIds.length > 0 && <SecondaryButton label="Clear selection" onPress={() => setSelectedReturnIds([])} />}
+          <PrimaryButton label={busy ? 'Returning…' : `Return selected (${selectedReturnIds.length})`} onPress={returnSelected} disabled={busy || !selectedReturnIds.length} />
           <SecondaryButton label="Cancel" onPress={() => setScreen('home')} />
         </ScrollView>
       </SafeAreaView>
@@ -594,7 +580,7 @@ export default function App() {
         )}
         {stats?.lastAction ? <Text style={styles.note}>Last action: {stats.lastAction}</Text> : null}
         <ActionCard title="Check out rental" detail="Scan a guest pass, then scan equipment. Each item saves immediately." onPress={() => start('checkout')} />
-        <ActionCard title="Return equipment" detail="Scan equipment to return it, or scan a guest pass to return everything." onPress={() => start('return')} />
+        <ActionCard title="Return equipment" detail="Scan equipment or a guest pass, then select the items to return." onPress={() => start('return')} />
         <ActionCard title="Inventory lookup" detail="Scan equipment to see whether it is available or checked out." onPress={() => start('inventory')} />
         {gear.length > 0 && <Text style={styles.note}>Last session processed {gear.length} item{gear.length === 1 ? '' : 's'}.</Text>}
         <SecondaryButton label="Refresh dashboard" onPress={refreshStats} />
